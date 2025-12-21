@@ -1,0 +1,8 @@
+{
+  "name": "Neon Memorybook",
+  "description": "A futuristic, glassmorphism-styled social memory platform for friend groups using Supabase.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
