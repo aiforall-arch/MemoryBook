@@ -18,11 +18,83 @@ dist
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+lerna-debug.log*
 
-# Environment Variables (EXTREMELY IMPORTANT: Keep these secret!)
+# ============================================
+# ENVIRONMENT VARIABLES & SECRETS (CRITICAL!)
+# ============================================
+# All environment files with credentials
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.local
 *.env
+.env.*
+!.env.example
+!.env.sample
+
+# API Keys and credentials
+.apikeys
+.secrets
+secrets.json
+credentials.json
+private.key
+public.key
+
+# ============================================
+# IDE & EDITOR FILES THAT MAY CACHE SECRETS
+# ============================================
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+.sublime-project
+.sublime-workspace
+
+# ============================================
+# OS SPECIFIC FILES
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ============================================
+# NPM & PACKAGE MANAGER CACHES
+# ============================================
+npm-debug.log
+npm-error.log
+yarn-error.log
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnpm-debug.log
+
+# ============================================
+# NODE & JAVASCRIPT BUILD ARTIFACTS
+# ============================================
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# ============================================
+# SENSITIVE FILE EXTENSIONS
+# ============================================
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.json.example
