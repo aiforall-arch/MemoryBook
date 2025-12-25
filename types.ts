@@ -11,7 +11,7 @@ export interface UserProfile {
   };
 }
 
-export interface Comment {
+export interface PostComment {
   id: string;
   user_id: string;
   username: string;
@@ -31,7 +31,7 @@ export interface Post {
   likes_count: number;
   comments_count: number;
   is_liked: boolean;
-  comments?: Comment[];
+  comments?: PostComment[];
 }
 
 export type ViewState = 'home' | 'explore' | 'profile' | 'login' | 'upload';

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Layout/Sidebar';
+import { BottomNav } from './components/Layout/BottomNav';
 import { RightPanel } from './components/Layout/RightPanel';
 import { MasonryGrid } from './components/Feed/MasonryGrid';
+import { CommentsSheet } from './components/Feed/CommentsSheet';
 import { UploadModal } from './components/Upload/UploadModal';
 import { NeonButton } from './components/UI/NeonButton';
 import { api, supabase } from './services/supabase'; // Import real API
@@ -17,7 +19,7 @@ const HeroSection = () => (
         Capture the <span className="neon-text">Electric</span> Moments
       </h1>
       <p className="text-lg text-gray-200 mb-8 leading-relaxed">
-        A futuristic collaborative space for you and your friends. 
+        A futuristic collaborative space for you and your friends.
         Share memories in high fidelity, preserved in a digital glass vault.
       </p>
       <div className="flex gap-4 justify-center md:justify-start">
@@ -34,8 +36,10 @@ const App: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null);
 
-  // Login Form State
+  // Auth State
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
@@ -50,22 +54,33 @@ const App: React.FC = () => {
 
     // Check active session
     const checkSession = async () => {
-      const currentUser = await api.getCurrentUser();
-      if (currentUser) {
-        setUser(currentUser);
-        setView('home');
-        fetchPosts();
+      console.log('APP: checkSession start');
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('APP: getSession result', !!session);
+
+      if (session?.user) {
+        console.log('APP: session found, fetching profile');
+        const currentUser = await api.getCurrentUser(session.user);
+        console.log('APP: currentUser fetched', currentUser);
+        if (currentUser) {
+          setUser(currentUser);
+          setView('home');
+          fetchPosts(currentUser.id);
+        }
       }
     };
     checkSession();
 
     // Listen for auth changes (sign in, sign out)
+    console.log('APP: Setting up onAuthStateChange');
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-         const currentUser = await api.getCurrentUser();
-         setUser(currentUser);
-         setView('home');
-         fetchPosts();
+      console.log('APP: onAuthStateChange event:', event, !!session);
+      if (event === 'SIGNED_IN' && session?.user) {
+        console.log('APP: SIGNED_IN detected, fetching profile');
+        const currentUser = await api.getCurrentUser(session.user);
+        setUser(currentUser);
+        setView('home');
+        if (currentUser) fetchPosts(currentUser.id);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setView('login');
@@ -78,22 +93,23 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const handleLogin = async () => {
+  const handleAuth = async () => {
+    console.log('APP: handleAuth start', { authMode, email });
     setIsLoading(true);
     setAuthError('');
     try {
-      // Try to sign in
-      await api.signIn(email, password);
-    } catch (e: any) {
-      console.error("Login failed", e);
-      // Optional: Auto-attempt signup if login fails for demo purposes
-      // In production, handle this explicitly
-      try {
+      if (authMode === 'login') {
+        console.log('APP: calling api.signIn');
+        await api.signIn(email, password);
+        console.log('APP: api.signIn returned');
+      } else {
         await api.signUp(email, password);
-        alert("Account created! Check your email to confirm, or if auto-confirm is on, sign in again.");
-      } catch (signupError: any) {
-        setAuthError(e.message || "Authentication failed");
+        alert("Account created! Check your email to confirm, or if auto-confirm is on, you can now sign in.");
+        setAuthMode('login');
       }
+    } catch (e: any) {
+      console.error("Auth failed", e);
+      setAuthError(e.message || "Authentication failed");
     } finally {
       setIsLoading(false);
     }
@@ -103,10 +119,12 @@ const App: React.FC = () => {
     await api.signOut();
   };
 
-  const fetchPosts = async () => {
+  const fetchPosts = async (userIdOverride?: string) => {
     setIsLoading(true);
     try {
-      const data = await api.getPosts();
+      // Use the override if provided, otherwise fallback to current user state
+      const effectiveUserId = userIdOverride || user?.id;
+      const data = await api.getPosts(effectiveUserId);
       setPosts(data);
     } catch (e) {
       console.error("Error fetching posts:", e);
@@ -115,20 +133,34 @@ const App: React.FC = () => {
     }
   };
 
+  const handleToggleLike = async (postId: string) => {
+    if (!user) return;
+    try {
+      await api.toggleLike(postId, user.id);
+      // Optional: Refresh posts or update state locally
+      // For now, let's just refresh to be safe and accurate
+      fetchPosts();
+    } catch (e) {
+      console.error("Error toggling like:", e);
+    }
+  };
+
   const handleUpload = async (file: File, caption: string) => {
     if (!user) return;
-    
+
     try {
       // 1. Upload Image to Storage Bucket
       const publicUrl = await api.uploadImage(file);
-      
+
       // 2. Create Post in Database
       await api.createPost(user.id, publicUrl, caption);
-      
-      // 3. Refresh Feed
-      await fetchPosts();
-      
+
+      // 3. Refresh Feed with current user
+      await fetchPosts(user.id);
+
       setView('home');
+      setIsUploadOpen(false); // Explicitly close modal
+      alert("Memory captured successfully! 📸✨");
     } catch (e) {
       console.error("Upload failed:", e);
       alert("Failed to upload memory. Please try again.");
@@ -148,42 +180,50 @@ const App: React.FC = () => {
             <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-2xl mx-auto flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.4)] mb-6">
               <span className="text-white text-3xl font-bold">M</span>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-            <p className="text-gray-400">Enter the digital vault of memories.</p>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              {authMode === 'login' ? 'Welcome Back' : 'Join MemoryBook'}
+            </h1>
+            <p className="text-gray-400">
+              {authMode === 'login' ? 'Enter the digital vault of memories.' : 'Start preserving your electric moments.'}
+            </p>
           </div>
 
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Email</label>
-              <input 
-                type="email" 
+              <input
+                type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="user@example.com" 
-                className="w-full bg-[#0B0F1A]/50 border border-white/10 rounded-xl p-3 text-white focus:border-purple-500 focus:outline-none transition-colors" 
+                placeholder="user@example.com"
+                className="w-full bg-[#0B0F1A]/50 border border-white/10 rounded-xl p-3 text-white focus:border-purple-500 focus:outline-none transition-colors"
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Password</label>
-              <input 
-                type="password" 
+              <input
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••" 
-                className="w-full bg-[#0B0F1A]/50 border border-white/10 rounded-xl p-3 text-white focus:border-purple-500 focus:outline-none transition-colors" 
+                placeholder="••••••••"
+                className="w-full bg-[#0B0F1A]/50 border border-white/10 rounded-xl p-3 text-white focus:border-purple-500 focus:outline-none transition-colors"
               />
             </div>
-            
+
             {authError && <p className="text-red-400 text-sm text-center">{authError}</p>}
 
-            <NeonButton fullWidth onClick={handleLogin} isLoading={isLoading}>
-              Enter MemoryBook
+            <NeonButton fullWidth onClick={handleAuth} isLoading={isLoading}>
+              {authMode === 'login' ? 'Enter MemoryBook' : 'Create Account'}
             </NeonButton>
           </div>
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-500">
-              New here? <span className="text-cyan-400">We'll create an account for you automatically upon login.</span>
+              {authMode === 'login' ? (
+                <>New here? <button onClick={() => setAuthMode('signup')} className="text-cyan-400 hover:underline">Create an account</button></>
+              ) : (
+                <>Already have an account? <button onClick={() => setAuthMode('login')} className="text-cyan-400 hover:underline">Welcome back</button></>
+              )}
             </p>
           </div>
         </div>
@@ -194,18 +234,26 @@ const App: React.FC = () => {
   // --- MAIN APP LAYOUT ---
   return (
     <div className="min-h-screen bg-[#0B0F1A]">
-      <Sidebar 
-        currentView={view} 
+      <Sidebar
+        currentView={view}
         onChangeView={(v) => {
-            if (v === 'upload') setIsUploadOpen(true);
-            else setView(v);
-        }} 
+          if (v === 'upload') setIsUploadOpen(true);
+          else setView(v);
+        }}
         onLogout={handleLogout}
       />
-      
+
+      <BottomNav
+        currentView={view}
+        onChangeView={(v) => {
+          if (v === 'upload') setIsUploadOpen(true);
+          else setView(v);
+        }}
+      />
+
       <main className="lg:pl-64 xl:pr-80 min-h-screen relative">
-        <div className="max-w-7xl mx-auto p-4 lg:p-8 pb-20">
-          
+        <div className="max-w-7xl mx-auto p-4 lg:p-8 pb-32 lg:pb-8">
+
           {/* Header for Mobile */}
           <div className="lg:hidden flex items-center justify-between mb-8">
             <h1 className="text-xl font-bold text-white">MemoryBook</h1>
@@ -213,42 +261,52 @@ const App: React.FC = () => {
           </div>
 
           {view === 'home' && (
-             <>
-               <HeroSection />
-               <div className="flex items-center justify-between mb-8">
-                 <h2 className="text-2xl font-bold text-white">Latest Memories</h2>
-                 <div className="flex gap-2">
-                   <select className="bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300 p-2 focus:outline-none">
-                     <option>All Friends</option>
-                     <option>Close Friends</option>
-                   </select>
-                 </div>
-               </div>
-               <MasonryGrid posts={posts} isLoading={isLoading} />
-               {!isLoading && (
-                 <div className="mt-12 text-center">
-                   <NeonButton variant="secondary" onClick={fetchPosts}>Refresh Memories</NeonButton>
-                 </div>
-               )}
-             </>
+            <>
+              <HeroSection />
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-2xl font-bold text-white">Latest Memories</h2>
+                <div className="flex gap-2">
+                  <select title="Filter memories" className="bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300 p-2 focus:outline-none">
+                    <option>All Friends</option>
+                    <option>Close Friends</option>
+                  </select>
+                </div>
+              </div>
+              <MasonryGrid
+                posts={posts}
+                isLoading={isLoading}
+                onLike={handleToggleLike}
+                onComment={(id) => setActiveCommentPostId(id)}
+              />
+              {!isLoading && (
+                <div className="mt-12 text-center">
+                  <NeonButton variant="secondary" onClick={fetchPosts}>Refresh Memories</NeonButton>
+                </div>
+              )}
+            </>
           )}
 
           {view === 'explore' && (
-             <div className="text-center py-20">
-                <h2 className="text-3xl font-bold text-white mb-4">Explore the Vault</h2>
-                <p className="text-gray-400">Discover public memories from around the world.</p>
-                {/* Reusing Masonry for demo */}
-                <div className="mt-8">
-                  <MasonryGrid posts={posts.slice().reverse()} isLoading={isLoading} />
-                </div>
-             </div>
+            <div className="text-center py-20">
+              <h2 className="text-3xl font-bold text-white mb-4">Explore the Vault</h2>
+              <p className="text-gray-400">Discover public memories from around the world.</p>
+              {/* Reusing Masonry for demo */}
+              <div className="mt-8">
+                <MasonryGrid
+                  posts={posts.slice().reverse()}
+                  isLoading={isLoading}
+                  onLike={handleToggleLike}
+                  onComment={(id) => setActiveCommentPostId(id)}
+                />
+              </div>
+            </div>
           )}
 
-           {view === 'community' && (
-             <div className="text-center py-20">
-                <h2 className="text-3xl font-bold text-white mb-4">Community</h2>
-                <p className="text-gray-400">Find friends and groups.</p>
-             </div>
+          {view === 'community' && (
+            <div className="text-center py-20">
+              <h2 className="text-3xl font-bold text-white mb-4">Community</h2>
+              <p className="text-gray-400">Find friends and groups.</p>
+            </div>
           )}
 
           {view === 'profile' && (
@@ -258,16 +316,21 @@ const App: React.FC = () => {
               </div>
               <h1 className="text-3xl font-bold text-white mb-2">{user?.username}</h1>
               <p className="text-gray-400 mb-8 max-w-md text-center">{user?.bio}</p>
-              
+
               <div className="flex gap-8 mb-12 border-b border-white/10 pb-8">
                 <div className="text-center"><span className="block text-2xl font-bold text-white">{user?.stats.posts}</span><span className="text-xs text-gray-500 uppercase">Posts</span></div>
                 <div className="text-center"><span className="block text-2xl font-bold text-white">{user?.stats.likes}</span><span className="text-xs text-gray-500 uppercase">Likes</span></div>
                 <div className="text-center"><span className="block text-2xl font-bold text-white">{user?.stats.friends}</span><span className="text-xs text-gray-500 uppercase">Friends</span></div>
               </div>
-              
+
               <div className="w-full">
                 <h3 className="text-xl font-bold text-white mb-6">Your Gallery</h3>
-                <MasonryGrid posts={posts.filter(p => p.user_id === user?.id)} isLoading={false} />
+                <MasonryGrid
+                  posts={posts.filter(p => p.user_id === user?.id)}
+                  isLoading={false}
+                  onLike={handleToggleLike}
+                  onComment={(id) => setActiveCommentPostId(id)}
+                />
               </div>
             </div>
           )}
@@ -277,9 +340,18 @@ const App: React.FC = () => {
       <RightPanel user={user} />
 
       {isUploadOpen && (
-        <UploadModal 
-          onClose={() => setIsUploadOpen(false)} 
-          onUpload={handleUpload} 
+        <UploadModal
+          onClose={() => setIsUploadOpen(false)}
+          onUpload={handleUpload}
+        />
+      )}
+
+      {activeCommentPostId && (
+        <CommentsSheet
+          postId={activeCommentPostId}
+          user={user}
+          onClose={() => setActiveCommentPostId(null)}
+          onCommentAdded={() => fetchPosts()}
         />
       )}
     </div>

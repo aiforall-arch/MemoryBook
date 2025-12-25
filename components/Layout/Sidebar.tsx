@@ -17,8 +17,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onL
   ];
 
   return (
-    <div className="fixed left-0 top-0 h-full w-20 lg:w-64 glass-panel border-r border-white/5 z-40 flex flex-col justify-between py-8">
-      
+    <div className="hidden lg:flex fixed left-0 top-0 h-full w-64 glass-panel border-r border-white/5 z-40 flex-col justify-between py-8">
+
       {/* Logo Area */}
       <div className="flex flex-col items-center lg:items-start px-0 lg:px-8 mb-8">
         <div className="h-10 w-10 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20 mb-2">
@@ -39,8 +39,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onL
               onClick={() => onChangeView(item.id as ViewState)}
               className={`
                 flex items-center gap-4 p-3 rounded-xl transition-all duration-300 group
-                ${isActive 
-                  ? 'bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-500/30' 
+                ${isActive
+                  ? 'bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-500/30'
                   : 'hover:bg-white/5 text-gray-400 hover:text-white'}
               `}
             >
@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onL
 
       {/* Footer / Logout */}
       <div className="px-3 lg:px-6">
-        <button 
+        <button
           onClick={onLogout}
           className="w-full flex items-center gap-4 p-3 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
         >

@@ -6,9 +6,10 @@ import { GlassCard } from '../UI/GlassCard';
 interface PostCardProps {
   post: Post;
   onLike: (id: string) => void;
+  onComment: (id: string) => void;
 }
 
-export const PostCard: React.FC<PostCardProps> = ({ post, onLike }) => {
+export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onComment }) => {
   const [liked, setLiked] = useState(post.is_liked);
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [isHovered, setIsHovered] = useState(false);
@@ -22,7 +23,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike }) => {
   };
 
   return (
-    <div 
+    <div
       className="mb-6 relative group break-inside-avoid"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -31,9 +32,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike }) => {
         {/* Header */}
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img 
-              src={post.user_avatar} 
-              alt={post.username} 
+            <img
+              src={post.user_avatar}
+              alt={post.username}
               className="w-10 h-10 rounded-full border-2 border-purple-500/30 object-cover"
             />
             <div>
@@ -41,22 +42,22 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike }) => {
               <p className="text-xs text-gray-400">{new Date(post.created_at).toLocaleDateString()}</p>
             </div>
           </div>
-          <button className="text-gray-400 hover:text-white">
+          <button aria-label="More options" className="text-gray-400 hover:text-white">
             <MoreHorizontal size={20} />
           </button>
         </div>
 
         {/* Image */}
         <div className="relative overflow-hidden w-full bg-gray-900 aspect-auto">
-          <img 
-            src={post.image_url} 
+          <img
+            src={post.image_url}
             alt={post.caption}
             loading="lazy"
             className="w-full h-auto object-cover transform transition-transform duration-700 group-hover:scale-105"
           />
           {/* Gradient Overlay on Hover */}
           <div className={`absolute inset-0 bg-gradient-to-t from-[#0B0F1A] via-transparent to-transparent opacity-0 group-hover:opacity-80 transition-opacity duration-300 flex items-end justify-center pb-8`}>
-             <span className="text-white/80 text-sm font-medium tracking-widest uppercase">View Memory</span>
+            <span className="text-white/80 text-sm font-medium tracking-widest uppercase">View Memory</span>
           </div>
         </div>
 
@@ -69,21 +70,24 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike }) => {
           {/* Actions */}
           <div className="flex items-center justify-between border-t border-white/10 pt-4">
             <div className="flex items-center gap-4">
-              <button 
+              <button
                 onClick={handleLike}
                 className={`flex items-center gap-2 transition-colors ${liked ? 'text-pink-500' : 'text-gray-400 hover:text-pink-400'}`}
               >
                 <Heart size={20} fill={liked ? "currentColor" : "none"} className={liked ? "animate-[bounce_0.2s_ease-in-out]" : ""} />
                 <span className="text-xs font-medium">{likesCount}</span>
               </button>
-              
-              <button className="flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors">
+
+              <button
+                onClick={() => onComment(post.id)}
+                className="flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors"
+              >
                 <MessageCircle size={20} />
                 <span className="text-xs font-medium">{post.comments_count}</span>
               </button>
             </div>
-            
-            <button className="text-gray-400 hover:text-white transition-colors">
+
+            <button aria-label="Share memory" className="text-gray-400 hover:text-white transition-colors">
               <Share2 size={20} />
             </button>
           </div>

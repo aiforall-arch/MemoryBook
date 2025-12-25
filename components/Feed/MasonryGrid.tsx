@@ -5,9 +5,11 @@ import { PostCard } from './PostCard';
 interface MasonryGridProps {
   posts: Post[];
   isLoading: boolean;
+  onLike: (id: string) => void;
+  onComment: (id: string) => void;
 }
 
-export const MasonryGrid: React.FC<MasonryGridProps> = ({ posts, isLoading }) => {
+export const MasonryGrid: React.FC<MasonryGridProps> = ({ posts, isLoading, onLike, onComment }) => {
   if (isLoading) {
     return (
       <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
@@ -33,10 +35,11 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({ posts, isLoading }) =>
   return (
     <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
       {posts.map((post) => (
-        <PostCard 
-          key={post.id} 
-          post={post} 
-          onLike={(id) => console.log('Liked:', id)} 
+        <PostCard
+          key={post.id}
+          post={post}
+          onLike={onLike}
+          onComment={onComment}
         />
       ))}
     </div>
