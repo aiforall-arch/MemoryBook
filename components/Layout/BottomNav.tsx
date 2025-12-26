@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Compass, Users, User, Plus } from 'lucide-react';
+import { Home, Compass, BookOpen, User, Plus } from 'lucide-react';
 import { ViewState } from '../../types';
 
 interface BottomNavProps {
@@ -12,7 +12,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentView, onChangeView 
         { id: 'home', icon: Home, label: 'Home' },
         { id: 'explore', icon: Compass, label: 'Explore' },
         { id: 'upload', icon: Plus, label: 'Add', isSpecial: true },
-        { id: 'community', icon: Users, label: 'Feed' },
+        { id: 'stories', icon: BookOpen, label: 'Stories' },
         { id: 'profile', icon: User, label: 'Profile' },
     ];
 

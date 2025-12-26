@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Compass, Users, User, PlusCircle, LogOut } from 'lucide-react';
+import { Home, Compass, BookOpen, User, PlusCircle, LogOut } from 'lucide-react';
 import { ViewState } from '../../types';
 
 interface SidebarProps {
@@ -12,14 +12,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onL
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'explore', label: 'Explore', icon: Compass },
-    { id: 'community', label: 'Community', icon: Users },
+    { id: 'stories', label: 'Stories', icon: BookOpen },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 
   return (
     <div className="hidden lg:flex fixed left-0 top-0 h-full w-64 glass-panel border-r border-white/5 z-40 flex-col justify-between py-8">
-
-      {/* Logo Area */}
+      {/* ... logo area ... */}
       <div className="flex flex-col items-center lg:items-start px-0 lg:px-8 mb-8">
         <div className="h-10 w-10 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20 mb-2">
           <span className="text-white font-bold text-xl">M</span>

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Post, UserProfile, PostComment } from '../types';
+import { Post, UserProfile, PostComment, Story, StoryComment, CreateStoryInput } from '../types';
 import { ENV } from '../src/env';
 
 // ------------------------------------------------------------------
@@ -79,32 +79,35 @@ export const api = {
         console.log('SUPABASE: No active user session');
         return null;
       }
-      console.log('SUPABASE: 1/3 - fetching profile (with 5s timeout)...');
-      let profileResult: any = { data: null, error: null };
-      try {
-        profileResult = await withTimeout(supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(), 5000);
-        console.log('SUPABASE: profile result', { data: !!profileResult.data, error: profileResult.error });
-      } catch (timeoutErr) {
-        console.warn('SUPABASE: profile fetch timed out, proceeding with default');
-      }
+      console.log('SUPABASE: 1/3 - fetching profile (with 15s timeout)...');
 
-      console.log('SUPABASE: 2/3 - fetching posts count...');
-      let postsResult: any = { count: 0, error: null };
-      try {
-        postsResult = await withTimeout(supabase.from('posts').select('*', { count: 'exact', head: true }).eq('user_id', user.id), 5000);
-        console.log('SUPABASE: posts result', { count: postsResult.count, error: postsResult.error });
-      } catch (timeoutErr) {
-        console.warn('SUPABASE: posts count timed out');
-      }
+      // Run all queries in parallel for faster loading
+      const [profileResult, postsResult, userPostsResult] = await Promise.all([
+        // Profile query
+        withTimeout(supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(), 15000)
+          .catch((err) => {
+            console.warn('SUPABASE: profile fetch error/timeout', err.message);
+            return { data: null, error: err };
+          }) as Promise<{ data: any; error: any }>,
+        // Posts count query
+        withTimeout(supabase.from('posts').select('*', { count: 'exact', head: true }).eq('user_id', user.id), 15000)
+          .catch((err) => {
+            console.warn('SUPABASE: posts count error/timeout', err.message);
+            return { count: 0, error: err };
+          }) as Promise<{ count: number | null; error: any }>,
+        // User posts IDs query
+        withTimeout(supabase.from('posts').select('id').eq('user_id', user.id), 15000)
+          .catch((err) => {
+            console.warn('SUPABASE: user posts error/timeout', err.message);
+            return { data: [], error: err };
+          }) as Promise<{ data: any[]; error: any }>
+      ]);
 
-      console.log('SUPABASE: 3/3 - fetching user post IDs...');
-      let userPostsResult: any = { data: [], error: null };
-      try {
-        userPostsResult = await withTimeout(supabase.from('posts').select('id').eq('user_id', user.id), 5000);
-        console.log('SUPABASE: user posts result', { count: userPostsResult.data?.length, error: userPostsResult.error });
-      } catch (timeoutErr) {
-        console.warn('SUPABASE: user posts fetch timed out');
-      }
+      console.log('SUPABASE: All queries completed', {
+        hasProfile: !!profileResult.data,
+        postsCount: postsResult.count,
+        userPostsCount: userPostsResult.data?.length
+      });
 
       const profile = profileResult.data;
       const postsCount = postsResult.count;
@@ -308,6 +311,225 @@ export const api = {
       .from('posts')
       .insert({ user_id: userId, image_url: imageUrl, caption });
 
+    if (error) throw error;
+  },
+
+  // 5. Profile Picture Upload (NEW - separate from existing logic)
+  uploadProfilePicture: async (file: File, userId: string): Promise<string> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `avatars/${userId}_${Date.now()}.${fileExt}`;
+
+    // Upload to storage bucket
+    const { error: uploadError } = await supabase.storage
+      .from('memorial_photos')
+      .upload(fileName, file, { upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data } = supabase.storage
+      .from('memorial_photos')
+      .getPublicUrl(fileName);
+
+    const publicUrl = data.publicUrl;
+
+    // Update profile with new avatar URL - use update to preserve existing fields
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        avatar_url: publicUrl,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (updateError) throw updateError;
+
+    return publicUrl;
+  },
+
+  // 6. Database - Stories (NEW - separate from existing logic)
+  getStories: async (language?: 'en' | 'ta'): Promise<Story[]> => {
+    let query = supabase
+      .from('stories')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (language) {
+      query = query.eq('language', language);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('SUPABASE: getStories error', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) return [];
+
+    // Fetch profiles separately
+    const userIds = Array.from(new Set(data.map((s: any) => s.author_id)));
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url')
+      .in('id', userIds);
+
+    const profileMap = (profilesData || []).reduce((acc: any, p: any) => {
+      acc[p.id] = p;
+      return acc;
+    }, {});
+
+    return data.map((item: any) => {
+      const profile = profileMap[item.author_id];
+      return {
+        id: item.id,
+        title: item.title,
+        content: item.content,
+        language: item.language,
+        author_id: item.author_id,
+        author_username: profile?.username || 'User',
+        author_avatar: profile?.avatar_url || `https://ui-avatars.com/api/?name=${profile?.username || 'User'}&background=random`,
+        cover_image_url: item.cover_image_url,
+        created_at: item.created_at,
+        likes_count: item.likes_count || 0,
+        comments_count: item.comments_count || 0,
+        read_count: item.read_count || 0,
+      };
+    });
+  },
+
+  getStory: async (storyId: string, userId?: string): Promise<Story | null> => {
+    const { data, error } = await supabase
+      .from('stories')
+      .select('*')
+      .eq('id', storyId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error('SUPABASE: getStory error', error);
+      return null;
+    }
+
+    // Fetch profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('username, avatar_url')
+      .eq('id', data.author_id)
+      .maybeSingle();
+
+    // Check if liked
+    let isLiked = false;
+    if (userId) {
+      const { data: likeData } = await supabase
+        .from('story_likes')
+        .select('*')
+        .eq('story_id', storyId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      isLiked = !!likeData;
+    }
+
+    // Increment read count (non-intrusive)
+    supabase.rpc('increment_story_read_count', { story_id: storyId }).then(() => { });
+
+    return {
+      id: data.id,
+      title: data.title,
+      content: data.content,
+      language: data.language,
+      author_id: data.author_id,
+      author_username: profile?.username || 'User',
+      author_avatar: profile?.avatar_url || `https://ui-avatars.com/api/?name=${profile?.username || 'User'}&background=random`,
+      cover_image_url: data.cover_image_url,
+      created_at: data.created_at,
+      likes_count: data.likes_count || 0,
+      comments_count: data.comments_count || 0,
+      read_count: data.read_count || 0,
+      is_liked: isLiked
+    };
+  },
+
+  createStory: async (userId: string, input: any, coverImageUrl?: string) => {
+    const { error } = await supabase
+      .from('stories')
+      .insert({
+        author_id: userId,
+        title: input.title,
+        content: input.content,
+        language: input.language,
+        cover_image_url: coverImageUrl
+      });
+
+    if (error) throw error;
+  },
+
+  likeStory: async (storyId: string, userId: string) => {
+    const { data: existingLike } = await supabase
+      .from('story_likes')
+      .select('*')
+      .eq('story_id', storyId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingLike) {
+      const { error } = await supabase
+        .from('story_likes')
+        .delete()
+        .eq('story_id', storyId)
+        .eq('user_id', userId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('story_likes')
+        .insert({ story_id: storyId, user_id: userId });
+      if (error) throw error;
+    }
+  },
+
+  getStoryComments: async (storyId: string): Promise<StoryComment[]> => {
+    const { data, error } = await supabase
+      .from('story_comments')
+      .select('*')
+      .eq('story_id', storyId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('SUPABASE: getStoryComments error', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) return [];
+
+    // Fetch profiles separately
+    const userIds = Array.from(new Set(data.map((c: any) => c.user_id)));
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url')
+      .in('id', userIds);
+
+    const profileMap = (profilesData || []).reduce((acc: any, p: any) => {
+      acc[p.id] = p;
+      return acc;
+    }, {});
+
+    return data.map((item: any) => {
+      const profile = profileMap[item.user_id];
+      return {
+        id: item.id,
+        story_id: item.story_id,
+        user_id: item.user_id,
+        username: profile?.username || 'User',
+        avatar_url: profile?.avatar_url || `https://ui-avatars.com/api/?name=${profile?.username || 'User'}&background=random`,
+        content: item.content,
+        created_at: item.created_at
+      };
+    });
+  },
+
+  addStoryComment: async (storyId: string, userId: string, content: string) => {
+    const { error } = await supabase
+      .from('story_comments')
+      .insert({ story_id: storyId, user_id: userId, content });
     if (error) throw error;
   }
 };

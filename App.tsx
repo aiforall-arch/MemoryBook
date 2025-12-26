@@ -3,11 +3,18 @@ import { Sidebar } from './components/Layout/Sidebar';
 import { BottomNav } from './components/Layout/BottomNav';
 import { RightPanel } from './components/Layout/RightPanel';
 import { MasonryGrid } from './components/Feed/MasonryGrid';
-import { CommentsSheet } from './components/Feed/CommentsSheet';
-import { UploadModal } from './components/Upload/UploadModal';
+import { EnhancedCommentsSheet } from './components/Feed/EnhancedCommentsSheet';
+import { ShareModal } from './components/Feed/ShareModal';
+import { EnhancedUploadModal } from './components/Upload/EnhancedUploadModal';
+import { ProfilePictureUploader } from './components/Upload/ProfilePictureUploader';
+import { WelcomeScreen } from './components/Auth/WelcomeScreen';
 import { NeonButton } from './components/UI/NeonButton';
-import { api, supabase } from './services/supabase'; // Import real API
-import { UserProfile, Post, ViewState } from './types';
+import { Camera } from 'lucide-react';
+import { api, supabase } from './services/supabase';
+import { UserProfile, Post, ViewState, Story, StoryComment, CreateStoryInput } from './types';
+import { StoriesList } from './components/Stories/StoriesList';
+import { StoryReader } from './components/Stories/StoryReader';
+import { StoryEditor } from './components/Stories/StoryEditor';
 
 // Simple Hero Component for Home View
 const HeroSection = () => (
@@ -38,11 +45,28 @@ const App: React.FC = () => {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null);
 
+  // Profile Picture Upload State (NEW - separate from existing logic)
+  const [isProfilePictureOpen, setIsProfilePictureOpen] = useState(false);
+
+  // Share Modal State (NEW - separate from existing logic)
+  const [activeSharePost, setActiveSharePost] = useState<Post | null>(null);
+
   // Auth State
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
+
+  // Stories State (NEW - separate from existing logic)
+  const [stories, setStories] = useState<Story[]>([]);
+  const [activeStory, setActiveStory] = useState<Story | null>(null);
+  const [isStoryEditorOpen, setIsStoryEditorOpen] = useState(false);
+  const [storyComments, setStoryComments] = useState<StoryComment[]>([]);
+  const [isLoadingStories, setIsLoadingStories] = useState(false);
+  const [isLoadingStoryComments, setIsLoadingStoryComments] = useState(false);
+
+  // Welcome Screen State (NEW - separate from existing logic)
+  const [showWelcome, setShowWelcome] = useState(true);
 
   // 1. Check Session on Mount & Listen for Changes
   useEffect(() => {
@@ -92,6 +116,20 @@ const App: React.FC = () => {
       authListener.subscription.unsubscribe();
     };
   }, []);
+
+  // Fetch stories when view changes to 'stories'
+  useEffect(() => {
+    if (view === 'stories') {
+      fetchStories();
+    }
+  }, [view]);
+
+  // Fetch comments when active story changes
+  useEffect(() => {
+    if (activeStory) {
+      fetchStoryComments(activeStory.id);
+    }
+  }, [activeStory]);
 
   const handleAuth = async () => {
     console.log('APP: handleAuth start', { authMode, email });
@@ -166,6 +204,93 @@ const App: React.FC = () => {
       alert("Failed to upload memory. Please try again.");
     }
   };
+
+  // --- STORIES LOGIC (NEW) ---
+  const fetchStories = async () => {
+    setIsLoadingStories(true);
+    try {
+      const data = await api.getStories();
+      setStories(data);
+    } catch (e) {
+      console.error("Error fetching stories:", e);
+    } finally {
+      setIsLoadingStories(false);
+    }
+  };
+
+  const fetchStoryComments = async (storyId: string) => {
+    setIsLoadingStoryComments(true);
+    try {
+      const data = await api.getStoryComments(storyId);
+      setStoryComments(data);
+    } catch (e) {
+      console.error("Error fetching story comments:", e);
+    } finally {
+      setIsLoadingStoryComments(false);
+    }
+  };
+
+  const handlePublishStory = async (input: CreateStoryInput, coverFile?: File) => {
+    if (!user) return;
+    try {
+      let coverUrl = '';
+      if (coverFile) {
+        coverUrl = await api.uploadImage(coverFile); // Reuse uploadImage
+      }
+      await api.createStory(user.id, input, coverUrl);
+      fetchStories();
+      setIsStoryEditorOpen(false);
+      alert("Story published successfully! 📖✨");
+    } catch (e) {
+      console.error("Error publishing story:", e);
+      alert("Failed to publish story.");
+    }
+  };
+
+  const handleLikeStory = async () => {
+    if (!user || !activeStory) return;
+    try {
+      await api.likeStory(activeStory.id, user.id);
+      // Update local state for immediate feedback
+      setStories(prev => prev.map(s =>
+        s.id === activeStory.id
+          ? { ...s, likes_count: s.is_liked ? s.likes_count - 1 : s.likes_count + 1, is_liked: !s.is_liked }
+          : s
+      ));
+    } catch (e) {
+      console.error("Error liking story:", e);
+    }
+  };
+
+  const handleAddStoryComment = async (content: string) => {
+    if (!user || !activeStory) return;
+    try {
+      await api.addStoryComment(activeStory.id, user.id, content);
+      fetchStoryComments(activeStory.id);
+      // Update local stories count
+      setStories(prev => prev.map(s =>
+        s.id === activeStory.id ? { ...s, comments_count: s.comments_count + 1 } : s
+      ));
+    } catch (e) {
+      console.error("Error adding story comment:", e);
+    }
+  };
+
+  // --- WELCOME SCREEN (NEW - shown before login) ---
+  if (view === 'login' && showWelcome) {
+    return (
+      <WelcomeScreen
+        onGetStarted={() => {
+          setAuthMode('signup');
+          setShowWelcome(false);
+        }}
+        onLogin={() => {
+          setAuthMode('login');
+          setShowWelcome(false);
+        }}
+      />
+    );
+  }
 
   // --- LOGIN VIEW ---
   if (view === 'login') {
@@ -277,6 +402,7 @@ const App: React.FC = () => {
                 isLoading={isLoading}
                 onLike={handleToggleLike}
                 onComment={(id) => setActiveCommentPostId(id)}
+                onShare={(post) => setActiveSharePost(post)}
               />
               {!isLoading && (
                 <div className="mt-12 text-center">
@@ -297,22 +423,40 @@ const App: React.FC = () => {
                   isLoading={isLoading}
                   onLike={handleToggleLike}
                   onComment={(id) => setActiveCommentPostId(id)}
+                  onShare={(post) => setActiveSharePost(post)}
                 />
               </div>
             </div>
           )}
 
-          {view === 'community' && (
-            <div className="text-center py-20">
-              <h2 className="text-3xl font-bold text-white mb-4">Community</h2>
-              <p className="text-gray-400">Find friends and groups.</p>
-            </div>
+          {view === 'stories' && (
+            <StoriesList
+              stories={stories}
+              isLoading={isLoadingStories}
+              user={user}
+              onStoryClick={(story) => {
+                // Fetch full story with like status
+                api.getStory(story.id, user?.id).then(fullStory => {
+                  if (fullStory) setActiveStory(fullStory);
+                });
+              }}
+              onCreateStory={() => setIsStoryEditorOpen(true)}
+            />
           )}
 
           {view === 'profile' && (
             <div className="flex flex-col items-center pt-10">
-              <div className="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-purple-500 to-cyan-500 mb-6">
+              {/* Profile Picture - Click to Edit (NEW) */}
+              <div
+                className="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-purple-500 to-cyan-500 mb-6 cursor-pointer relative group profile-picture-ring transition-all duration-300"
+                onClick={() => setIsProfilePictureOpen(true)}
+                title="Click to change profile picture"
+              >
                 <img src={user?.avatar_url} className="w-full h-full rounded-full object-cover border-4 border-[#0B0F1A]" alt="Profile" />
+                {/* Camera overlay on hover */}
+                <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera className="text-white" size={24} />
+                </div>
               </div>
               <h1 className="text-3xl font-bold text-white mb-2">{user?.username}</h1>
               <p className="text-gray-400 mb-8 max-w-md text-center">{user?.bio}</p>
@@ -340,18 +484,63 @@ const App: React.FC = () => {
       <RightPanel user={user} />
 
       {isUploadOpen && (
-        <UploadModal
+        <EnhancedUploadModal
           onClose={() => setIsUploadOpen(false)}
           onUpload={handleUpload}
         />
       )}
 
+      {/* Profile Picture Uploader (NEW - separate component) */}
+      <ProfilePictureUploader
+        isOpen={isProfilePictureOpen}
+        onClose={() => setIsProfilePictureOpen(false)}
+        currentAvatarUrl={user?.avatar_url}
+        onSave={async (file) => {
+          if (!user) return;
+          try {
+            const newAvatarUrl = await api.uploadProfilePicture(file, user.id);
+            setUser(prev => prev ? { ...prev, avatar_url: newAvatarUrl } : null);
+          } catch (error) {
+            console.error('Failed to upload profile picture:', error);
+          }
+        }}
+      />
+
       {activeCommentPostId && (
-        <CommentsSheet
+        <EnhancedCommentsSheet
           postId={activeCommentPostId}
           user={user}
           onClose={() => setActiveCommentPostId(null)}
           onCommentAdded={() => fetchPosts()}
+        />
+      )}
+
+      {/* Share Modal (NEW - separate component) */}
+      <ShareModal
+        post={activeSharePost!}
+        isOpen={!!activeSharePost}
+        onClose={() => setActiveSharePost(null)}
+      />
+
+      {/* Stories Components (NEW) */}
+      {activeStory && (
+        <StoryReader
+          story={activeStory}
+          user={user}
+          comments={storyComments}
+          isLoadingComments={isLoadingStoryComments}
+          onClose={() => setActiveStory(null)}
+          onLike={handleLikeStory}
+          onAddComment={handleAddStoryComment}
+        />
+      )}
+
+      {user && isStoryEditorOpen && (
+        <StoryEditor
+          user={user}
+          isOpen={isStoryEditorOpen}
+          onClose={() => setIsStoryEditorOpen(false)}
+          onPublish={handlePublishStory}
         />
       )}
     </div>
