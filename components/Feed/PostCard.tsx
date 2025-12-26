@@ -7,9 +7,10 @@ interface PostCardProps {
   post: Post;
   onLike: (id: string) => void;
   onComment: (id: string) => void;
+  onShare?: (post: Post) => void; // NEW - optional share handler
 }
 
-export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onComment }) => {
+export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onComment, onShare }) => {
   const [liked, setLiked] = useState(post.is_liked);
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [isHovered, setIsHovered] = useState(false);
@@ -87,7 +88,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onComment }) =
               </button>
             </div>
 
-            <button aria-label="Share memory" className="text-gray-400 hover:text-white transition-colors">
+            <button
+              onClick={() => onShare?.(post)}
+              aria-label="Share memory"
+              className="text-gray-400 hover:text-white transition-colors"
+            >
               <Share2 size={20} />
             </button>
           </div>

@@ -43,3 +43,82 @@ body {
 .neon-border-glow:hover {
   box-shadow: 0 0 15px rgba(139, 92, 246, 0.5), 0 0 5px rgba(34, 211, 238, 0.3);
 }
+
+/* Upload Component Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes progress-shine {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  50% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+.animate-progress-shine {
+  animation: progress-shine 1.5s ease-in-out infinite;
+}
+
+/* Profile picture glow on hover */
+.profile-picture-ring:hover {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.4), 0 0 40px rgba(34, 211, 238, 0.2);
+}
+
+/* Tamil Font Support */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap');
+
+.font-tamil {
+  font-family: 'Noto Sans Tamil', sans-serif;
+  line-height: 1.8;
+}
+
+/* Stories Prose Overrides */
+.prose-invert {
+  --tw-prose-body: #d1d5db;
+  --tw-prose-headings: #fff;
+  --tw-prose-links: #a855f7;
+  --tw-prose-bold: #fff;
+}
+
+/* Slide up animation for comments sheet */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
