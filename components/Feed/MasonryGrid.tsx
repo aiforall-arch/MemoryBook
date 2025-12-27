@@ -7,10 +7,22 @@ interface MasonryGridProps {
   isLoading: boolean;
   onLike: (id: string) => void;
   onComment: (id: string) => void;
-  onShare?: (post: Post) => void; // NEW - optional share handler
+  onShare?: (post: Post) => void;
+  onView?: (post: Post) => void;
+  onDelete?: (postId: string) => void;
+  currentUserId?: string;
 }
 
-export const MasonryGrid: React.FC<MasonryGridProps> = ({ posts, isLoading, onLike, onComment, onShare }) => {
+export const MasonryGrid: React.FC<MasonryGridProps> = ({
+  posts,
+  isLoading,
+  onLike,
+  onComment,
+  onShare,
+  onView,
+  onDelete,
+  currentUserId
+}) => {
   if (isLoading) {
     return (
       <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
@@ -42,6 +54,9 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({ posts, isLoading, onLi
           onLike={onLike}
           onComment={onComment}
           onShare={onShare}
+          onView={onView}
+          onDelete={onDelete}
+          currentUserId={currentUserId}
         />
       ))}
     </div>

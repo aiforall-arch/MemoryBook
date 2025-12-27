@@ -20,7 +20,8 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
 
     // Form states
     const [caption, setCaption] = useState('');
-    const [aspectRatio, setAspectRatio] = useState<AspectRatioKey>('portrait');
+    const [aspectRatio, setAspectRatio] = useState<AspectRatioKey | 'original'>('original');
+    const [originalDimensions, setOriginalDimensions] = useState<{ width: number, height: number, ratio: number } | null>(null);
 
     // UI states
     const [isDragging, setIsDragging] = useState(false);
@@ -33,7 +34,15 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
     const [uploadCancelled, setUploadCancelled] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const thumbRef = useRef<HTMLDivElement>(null);
     const { showToast, ToastComponent } = useToast();
+
+    // Set thumbnail background via ref to avoid JSX style prop linting
+    useEffect(() => {
+        if (thumbRef.current && croppedBlob) {
+            thumbRef.current.style.backgroundImage = `url(${URL.createObjectURL(croppedBlob)})`;
+        }
+    }, [croppedBlob]);
 
     const MAX_CAPTION_LENGTH = 500;
 
@@ -66,18 +75,17 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
         let fileToProcess = selectedFile;
 
         // Compression for large files
-        if (selectedFile.size > 1.5 * 1024 * 1024) {
+        if (selectedFile.size > 1.2 * 1024 * 1024) {
             setIsCompressing(true);
             try {
                 const options = {
-                    maxSizeMB: 1.5,
+                    maxSizeMB: 1.2,
                     maxWidthOrHeight: 1920,
                     useWebWorker: true,
                 };
                 console.log(`Original size: ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`);
                 fileToProcess = await imageCompression(selectedFile, options);
                 console.log(`Compressed size: ${(fileToProcess.size / 1024 / 1024).toFixed(2)} MB`);
-                showToast('Image compressed for optimal quality', 'info');
             } catch (error) {
                 console.error('Compression error:', error);
                 showToast('Compression failed, using original', 'error');
@@ -88,13 +96,19 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
 
         setOriginalFile(fileToProcess);
 
-        // Create preview URL
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setPreview(reader.result as string);
+        // Detect dimensions and create preview
+        const img = new Image();
+        img.onload = () => {
+            const width = img.naturalWidth;
+            const height = img.naturalHeight;
+            const ratio = width / height;
+
+            setOriginalDimensions({ width, height, ratio });
+            setPreview(img.src);
             setStep('crop');
+            setAspectRatio('original'); // Always default to original for "Rich experience"
         };
-        reader.readAsDataURL(fileToProcess);
+        img.src = URL.createObjectURL(fileToProcess);
     };
 
     // Handle crop completion
@@ -189,31 +203,46 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
     };
 
     // Aspect ratio button config
-    const aspectRatioButtons: { key: AspectRatioKey; icon: React.ReactNode; label: string }[] = [
-        { key: 'portrait', icon: <Maximize className="rotate-90" size={16} />, label: 'Portrait' },
-        { key: 'landscape', icon: <Minimize className="rotate-90" size={16} />, label: 'Landscape' },
-        { key: 'stories', icon: <Maximize size={16} />, label: 'Stories' },
-        { key: 'square', icon: <Square size={16} />, label: 'Square' },
+    const aspectRatioButtons = [
+        {
+            key: 'original' as const,
+            icon: <Sparkles size={16} />,
+            label: 'Original',
+            config: originalDimensions ? {
+                label: 'Original',
+                ratio: originalDimensions.ratio,
+                width: originalDimensions.width > 2000 ? 2000 : originalDimensions.width,
+                height: originalDimensions.width > 2000 ? 2000 / originalDimensions.ratio : originalDimensions.height
+            } : null
+        },
+        { key: 'portrait' as const, icon: <Maximize className="rotate-90" size={16} />, label: 'Portrait' },
+        { key: 'landscape' as const, icon: <Minimize className="rotate-90" size={16} />, label: 'Landscape' },
+        { key: 'stories' as const, icon: <Maximize size={16} />, label: 'Stories' },
+        { key: 'square' as const, icon: <Square size={16} />, label: 'Square' },
     ];
+
+    const currentRatioConfig = aspectRatio === 'original'
+        ? aspectRatioButtons[0].config
+        : ASPECT_RATIOS[aspectRatio as AspectRatioKey];
 
     return (
         <>
             {ToastComponent}
 
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                <GlassCard className="w-full max-w-2xl max-h-[90vh] overflow-y-auto relative animate-[fadeIn_0.3s_ease-out]">
+                <GlassCard className="w-full max-w-2xl max-h-[90vh] overflow-y-auto relative animate-[fadeIn_0.3s_ease-out] shadow-[0_0_100px_-20px_rgba(139,92,246,0.3)]">
                     {/* Close button */}
                     <button
                         onClick={onClose}
                         title="Close upload modal"
-                        className="absolute top-4 right-4 z-10 text-gray-400 hover:text-white transition-colors"
+                        className="absolute top-4 right-4 z-20 text-gray-400 hover:text-white transition-colors p-2 bg-white/5 rounded-full"
                     >
-                        <X size={24} />
+                        <X size={20} />
                     </button>
 
                     {/* Header */}
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
                             <UploadCloud size={20} className="text-white" />
                         </div>
                         <div>
@@ -222,8 +251,8 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
                             </h2>
                             <p className="text-xs text-gray-400">
                                 {step === 'select' && 'Choose an image to upload'}
-                                {step === 'crop' && 'Adjust your image'}
-                                {step === 'caption' && 'Add a caption'}
+                                {step === 'crop' && 'Style and frame your memory'}
+                                {step === 'caption' && 'Describe the moment'}
                             </p>
                         </div>
                     </div>
@@ -237,23 +266,23 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
                                 onDragLeave={handleDragLeave}
                                 onDrop={handleDrop}
                                 className={`
-                  relative w-full aspect-video border-2 border-dashed rounded-xl 
+                  relative w-full aspect-video border-2 border-dashed rounded-2xl 
                   flex flex-col items-center justify-center cursor-pointer transition-all duration-300
                   ${isDragging
                                         ? 'border-cyan-500 bg-cyan-500/10 scale-[1.02]'
-                                        : 'border-gray-600 hover:border-purple-500 hover:bg-white/5'
+                                        : 'border-white/10 hover:border-purple-500/50 hover:bg-white/5'
                                     }
                 `}
                             >
                                 {isCompressing ? (
                                     <div className="text-center">
                                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 mx-auto mb-4" />
-                                        <p className="text-white font-medium">Compressing Image...</p>
-                                        <p className="text-xs text-gray-400 mt-2">Making it lean and mean</p>
+                                        <p className="text-white font-medium">Processing Image...</p>
+                                        <p className="text-xs text-gray-400 mt-2">Preparing for the vault</p>
                                     </div>
                                 ) : (
                                     <div className="text-center p-8">
-                                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-4">
+                                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-6 shadow-inner">
                                             <ImageIcon size={40} className="text-gray-400" />
                                         </div>
                                         <p className="text-lg font-medium text-white mb-2">
@@ -262,15 +291,9 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
                                         <p className="text-sm text-gray-400">
                                             or click to browse
                                         </p>
-                                        <p className="text-xs text-gray-500 mt-4">
+                                        <p className="text-xs text-gray-500 mt-4 font-bold tracking-widest uppercase">
                                             JPG, PNG, WebP up to 10MB
                                         </p>
-                                        <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
-                                            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                                            <span className="text-[10px] text-cyan-400 uppercase tracking-widest font-bold">
-                                                Auto-compression Active
-                                            </span>
-                                        </div>
                                     </div>
                                 )}
 
@@ -287,44 +310,43 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
 
                         {/* Step 2: Cropping */}
                         {step === 'crop' && preview && (
-                            <div className="space-y-4">
+                            <div className="space-y-6">
                                 {/* Aspect Ratio Selector */}
-                                <div className="flex flex-wrap gap-2">
-                                    {aspectRatioButtons.map(({ key, icon, label }) => (
+                                <div className="flex flex-wrap gap-2 p-1 bg-white/5 rounded-2xl border border-white/5">
+                                    {aspectRatioButtons.map((btn) => (
                                         <button
-                                            key={key}
+                                            key={btn.key}
                                             type="button"
-                                            onClick={() => setAspectRatio(key)}
+                                            onClick={() => setAspectRatio(btn.key)}
                                             className={`
-                        flex items-center gap-2 px-4 py-2 rounded-xl border transition-all
-                        ${aspectRatio === key
-                                                    ? 'bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border-purple-500/50 text-white'
-                                                    : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/30'
+                        flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-300
+                        ${aspectRatio === btn.key
+                                                    ? 'bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border-purple-500/50 text-white shadow-lg'
+                                                    : 'bg-transparent border-transparent text-gray-500 hover:text-gray-300 hover:bg-white/5'
                                                 }
                       `}
                                         >
-                                            {icon}
-                                            <span className="text-sm">{label}</span>
-                                            <span className="text-xs text-gray-500">
-                                                {ASPECT_RATIOS[key].width}×{ASPECT_RATIOS[key].height}
-                                            </span>
+                                            <span className={aspectRatio === btn.key ? 'text-cyan-400' : ''}>{btn.icon}</span>
+                                            <span className="text-sm font-medium">{btn.label}</span>
                                         </button>
                                     ))}
                                 </div>
 
                                 {/* Image Cropper */}
-                                <ImageCropper
-                                    imageSrc={preview}
-                                    aspectRatio={aspectRatio}
-                                    onCropComplete={handleCropComplete}
-                                />
+                                {currentRatioConfig && (
+                                    <ImageCropper
+                                        imageSrc={preview}
+                                        aspectRatio={currentRatioConfig as any}
+                                        onCropComplete={handleCropComplete}
+                                    />
+                                )}
 
                                 {/* Navigation */}
-                                <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                                <div className="flex items-center justify-between pt-6 border-t border-white/5">
                                     <button
                                         type="button"
                                         onClick={handleChangeFile}
-                                        className="text-sm text-gray-400 hover:text-white transition-colors"
+                                        className="text-sm font-medium text-gray-400 hover:text-white transition-colors"
                                     >
                                         Change image
                                     </button>
@@ -340,49 +362,47 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
                             <div className="space-y-6">
                                 {/* Preview thumbnail */}
                                 {croppedBlob && (
-                                    <div className="flex gap-4 items-start">
+                                    <div className="flex gap-6 items-start p-4 bg-white/5 rounded-2xl border border-white/10">
                                         <div
-                                            className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 border border-white/10"
-                                            style={{
-                                                backgroundImage: `url(${URL.createObjectURL(croppedBlob)})`,
-                                                backgroundSize: 'cover',
-                                                backgroundPosition: 'center'
-                                            }}
+                                            ref={thumbRef}
+                                            className="w-32 h-32 rounded-xl overflow-hidden flex-shrink-0 border border-white/10 shadow-xl bg-cover bg-center"
                                         />
-                                        <div className="flex-1">
-                                            <p className="text-sm text-gray-400 mb-1">Ready to upload</p>
+                                        <div className="flex-1 pt-2">
+                                            <p className="text-sm font-bold text-white mb-1 uppercase tracking-widest text-cyan-400">Ready to upload</p>
                                             <p className="text-xs text-gray-500">
-                                                {ASPECT_RATIOS[aspectRatio].label} • {ASPECT_RATIOS[aspectRatio].width}×{ASPECT_RATIOS[aspectRatio].height}
+                                                {aspectRatio === 'original' ? 'Original Fit' : (ASPECT_RATIOS as any)[aspectRatio].label}
+                                                • High Quality Optimized
                                             </p>
+                                            <div className="mt-4 flex gap-2">
+                                                <div className="px-2 py-1 rounded bg-white/5 text-[10px] text-gray-400 border border-white/10">JPG</div>
+                                                <div className="px-2 py-1 rounded bg-white/5 text-[10px] text-gray-400 border border-white/10">Optimized</div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Caption input */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        Caption
-                                    </label>
-                                    <textarea
-                                        value={caption}
-                                        onChange={(e) => setCaption(e.target.value.slice(0, MAX_CAPTION_LENGTH))}
-                                        maxLength={MAX_CAPTION_LENGTH}
-                                        placeholder="What's the story behind this moment?"
-                                        className="w-full h-32 bg-[#0B0F1A] border border-white/10 rounded-xl p-4 text-white 
-                      focus:outline-none focus:border-purple-500 transition-colors resize-none"
-                                        disabled={isUploading}
-                                    />
-                                    <div className="flex justify-between mt-2">
-                                        <span className="text-xs text-gray-500">
-                                            Add some hashtags for discoverability
-                                        </span>
-                                        <span className={`text-xs transition-colors ${caption.length >= MAX_CAPTION_LENGTH * 0.9
-                                                ? 'text-orange-400'
-                                                : 'text-gray-500'
+                                    <div className="flex justify-between items-end mb-2">
+                                        <label className="text-sm font-bold text-gray-300 uppercase tracking-widest">
+                                            Story Description
+                                        </label>
+                                        <span className={`text-[10px] font-bold transition-colors ${caption.length >= MAX_CAPTION_LENGTH * 0.9
+                                            ? 'text-orange-400'
+                                            : 'text-gray-500'
                                             }`}>
                                             {caption.length}/{MAX_CAPTION_LENGTH}
                                         </span>
                                     </div>
+                                    <textarea
+                                        value={caption}
+                                        onChange={(e) => setCaption(e.target.value.slice(0, MAX_CAPTION_LENGTH))}
+                                        maxLength={MAX_CAPTION_LENGTH}
+                                        placeholder="What makes this memory special? Share the story..."
+                                        className="w-full h-32 bg-[#0B0F1A] border border-white/10 rounded-2xl p-4 text-white placeholder-gray-600
+                      focus:outline-none focus:border-purple-500/50 focus:bg-white/5 transition-all resize-none shadow-inner"
+                                        disabled={isUploading}
+                                    />
                                 </div>
 
                                 {/* Progress bar */}
@@ -397,7 +417,7 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
 
                                 {/* Action buttons */}
                                 {!isUploading && (
-                                    <div className="flex justify-between pt-4 border-t border-white/10">
+                                    <div className="flex justify-between pt-6 border-t border-white/5">
                                         <NeonButton variant="ghost" type="button" onClick={handleBack}>
                                             Back
                                         </NeonButton>

@@ -57,6 +57,28 @@ export const api = {
     if (error) throw error;
   },
 
+  resetPassword: async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}?type=recovery`,
+    });
+    if (error) throw error;
+  },
+
+  updatePassword: async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  },
+
+  signInWithOAuth: async (provider: 'google' | 'azure') => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}`,
+      },
+    });
+    if (error) throw error;
+  },
+
   getCurrentUser: async (existingUser?: any): Promise<UserProfile | null> => {
     console.log('SUPABASE: getCurrentUser start', { hasExistingUser: !!existingUser });
     console.log('SUPABASE: client config', { url: ENV.SUPABASE_URL });
@@ -109,9 +131,36 @@ export const api = {
         userPostsCount: userPostsResult.data?.length
       });
 
-      const profile = profileResult.data;
+      let profile = profileResult.data;
       const postsCount = postsResult.count;
       const userPosts = userPostsResult.data;
+
+      // --- AUTO-INITIALIZE PROFILE (NEW) ---
+      if (!profile) {
+        console.log('SUPABASE: Profile missing, auto-initializing...');
+        const metadata = user.user_metadata || {};
+        const initialUsername = metadata.full_name || metadata.name || user.email?.split('@')[0] || 'Member';
+        const initialAvatar = metadata.avatar_url || `https://ui-avatars.com/api/?name=${initialUsername}&background=random`;
+
+        const { data: newProfile, error: upsertError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            username: initialUsername,
+            avatar_url: initialAvatar,
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (upsertError) {
+          console.warn('SUPABASE: Profile auto-init failed', upsertError);
+        } else {
+          profile = newProfile;
+          console.log('SUPABASE: Profile auto-initialized successfully');
+        }
+      }
+      // -------------------------------------
 
       // Fetch total likes received on all user's posts
       let totalLikes = 0;
@@ -290,19 +339,31 @@ export const api = {
 
   // 4. Storage
   uploadImage: async (file: File): Promise<string> => {
-    const fileExt = file.name.split('.').pop();
+    const fileExt = file.name.split('.').pop() || 'jpg';
     const fileName = `${crypto.randomUUID()}.${fileExt}`;
 
+    console.log('SUPABASE: Uploading image...', fileName);
     const { error } = await supabase.storage
       .from('memorial_photos')
-      .upload(fileName, file);
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
 
-    if (error) throw error;
+    if (error) {
+      console.error('SUPABASE: Upload error', error);
+      throw error;
+    }
 
     const { data } = supabase.storage
       .from('memorial_photos')
       .getPublicUrl(fileName);
 
+    if (!data.publicUrl) {
+      throw new Error('Failed to generate public URL for uploaded image');
+    }
+
+    console.log('SUPABASE: Upload success, public URL:', data.publicUrl);
     return data.publicUrl;
   },
 
@@ -310,6 +371,15 @@ export const api = {
     const { error } = await supabase
       .from('posts')
       .insert({ user_id: userId, image_url: imageUrl, caption });
+
+    if (error) throw error;
+  },
+
+  deletePost: async (postId: string) => {
+    const { error } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', postId);
 
     if (error) throw error;
   },
@@ -345,6 +415,18 @@ export const api = {
     if (updateError) throw updateError;
 
     return publicUrl;
+  },
+
+  updateProfile: async (userId: string, updates: { username?: string; bio?: string }) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
   },
 
   // 6. Database - Stories (NEW - separate from existing logic)
@@ -531,5 +613,85 @@ export const api = {
       .from('story_comments')
       .insert({ story_id: storyId, user_id: userId, content });
     if (error) throw error;
+  },
+
+  // 7. Sidebar & Social Features
+  getRecentActivity: async (userId: string) => {
+    // Fetch likes and comments on user's posts
+    const { data: userPosts } = await supabase.from('posts').select('id, caption').eq('user_id', userId);
+    if (!userPosts || userPosts.length === 0) return [];
+
+    const postIds = userPosts.map(p => p.id);
+    const postMap = userPosts.reduce((acc: any, p) => { acc[p.id] = p.caption; return acc; }, {});
+
+    const [likesResult, commentsResult] = await Promise.all([
+      supabase.from('likes').select('user_id, created_at, post_id').in('post_id', postIds).neq('user_id', userId).order('created_at', { ascending: false }).limit(5),
+      supabase.from('comments').select('user_id, created_at, post_id, content').in('post_id', postIds).neq('user_id', userId).order('created_at', { ascending: false }).limit(5)
+    ]);
+
+    const allActivity = [
+      ...(likesResult.data || []).map(l => ({ ...l, type: 'like' })),
+      ...(commentsResult.data || []).map(c => ({ ...c, type: 'comment' }))
+    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
+
+    if (allActivity.length === 0) return [];
+
+    const actorIds = Array.from(new Set(allActivity.map(a => a.user_id)));
+    const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', actorIds);
+    const profileMap = (profiles || []).reduce((acc: any, p) => { acc[p.id] = p; return acc; }, {});
+
+    return allActivity.map((act: any) => ({
+      id: `${act.type}-${act.created_at}-${act.user_id}`,
+      username: profileMap[act.user_id]?.username || 'Someone',
+      avatar_url: profileMap[act.user_id]?.avatar_url,
+      type: act.type,
+      target_post_caption: postMap[act.post_id] || 'your photo',
+      created_at: act.created_at
+    }));
+  },
+
+  getSuggestedUsers: async (userId: string) => {
+    const { data: connections } = await supabase.from('connections').select('following_id').eq('follower_id', userId);
+    const followingIds = (connections || []).map(c => c.following_id);
+
+    let query = supabase
+      .from('profiles')
+      .select('id, username, avatar_url')
+      .neq('id', userId);
+
+    if (followingIds.length > 0) {
+      query = query.not('id', 'in', `(${followingIds.join(',')})`);
+    }
+
+    const { data: profiles, error } = await query.limit(5);
+
+    if (error) {
+      console.warn('SUPABASE: getSuggestedUsers error (could be missing connections table)', error);
+      // Fallback to simple query if connections table fails
+      const { data: fallbackProfiles } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url')
+        .neq('id', userId)
+        .limit(5);
+      return fallbackProfiles || [];
+    }
+    return profiles || [];
+  },
+
+  toggleFollow: async (followerId: string, followingId: string) => {
+    const { data: existing } = await supabase
+      .from('connections')
+      .select('*')
+      .eq('follower_id', followerId)
+      .eq('following_id', followingId)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from('connections').delete().eq('follower_id', followerId).eq('following_id', followingId);
+      return false; // Unfollowed
+    } else {
+      await supabase.from('connections').insert({ follower_id: followerId, following_id: followingId });
+      return true; // Followed
+    }
   }
 };

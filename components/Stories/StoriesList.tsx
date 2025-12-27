@@ -3,6 +3,7 @@ import { BookOpen, PenSquare, Filter } from 'lucide-react';
 import { Story, UserProfile } from '../../types';
 import { StoryCard } from './StoryCard';
 import { NeonButton } from '../UI/NeonButton';
+import { SkeletonLoader } from '../UI/SkeletonLoader';
 
 interface StoriesListProps {
     stories: Story[];
@@ -27,13 +28,7 @@ export const StoriesList: React.FC<StoriesListProps> = ({
         : stories.filter(s => s.language === languageFilter);
 
     if (isLoading) {
-        return (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="glass-panel rounded-2xl h-80 animate-pulse bg-white/5" />
-                ))}
-            </div>
-        );
+        return <SkeletonLoader type="story" count={4} />;
     }
 
     return (
@@ -56,8 +51,8 @@ export const StoriesList: React.FC<StoriesListProps> = ({
                         <button
                             onClick={() => setLanguageFilter('all')}
                             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${languageFilter === 'all'
-                                    ? 'bg-purple-500 text-white'
-                                    : 'text-gray-400 hover:text-white'
+                                ? 'bg-purple-500 text-white'
+                                : 'text-gray-400 hover:text-white'
                                 }`}
                         >
                             All
@@ -65,8 +60,8 @@ export const StoriesList: React.FC<StoriesListProps> = ({
                         <button
                             onClick={() => setLanguageFilter('en')}
                             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${languageFilter === 'en'
-                                    ? 'bg-cyan-500 text-white'
-                                    : 'text-gray-400 hover:text-white'
+                                ? 'bg-cyan-500 text-white'
+                                : 'text-gray-400 hover:text-white'
                                 }`}
                         >
                             English
@@ -74,8 +69,8 @@ export const StoriesList: React.FC<StoriesListProps> = ({
                         <button
                             onClick={() => setLanguageFilter('ta')}
                             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${languageFilter === 'ta'
-                                    ? 'bg-orange-500 text-white'
-                                    : 'text-gray-400 hover:text-white'
+                                ? 'bg-orange-500 text-white'
+                                : 'text-gray-400 hover:text-white'
                                 }`}
                         >
                             தமிழ்

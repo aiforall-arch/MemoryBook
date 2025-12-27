@@ -3,6 +3,7 @@ import { X, Image, Globe, Send, Loader2 } from 'lucide-react';
 import { CreateStoryInput, UserProfile } from '../../types';
 import { GlassCard } from '../UI/GlassCard';
 import { NeonButton } from '../UI/NeonButton';
+import { useToast } from '../UI/ToastNotification';
 import imageCompression from 'browser-image-compression';
 
 interface StoryEditorProps {
@@ -25,6 +26,7 @@ export const StoryEditor: React.FC<StoryEditorProps> = ({
     const [coverPreview, setCoverPreview] = useState<string | null>(null);
     const [isPublishing, setIsPublishing] = useState(false);
     const [error, setError] = useState('');
+    const { showToast, ToastComponent } = useToast();
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -37,7 +39,7 @@ export const StoryEditor: React.FC<StoryEditorProps> = ({
         try {
             // Compress image
             const compressed = await imageCompression(file, {
-                maxSizeMB: 1,
+                maxSizeMB: 1.2,
                 maxWidthOrHeight: 1920,
                 useWebWorker: true
             });
@@ -98,12 +100,14 @@ export const StoryEditor: React.FC<StoryEditorProps> = ({
 
     return (
         <div className="fixed inset-0 z-[70] bg-[#0B0F1A] overflow-y-auto">
+            {ToastComponent}
             {/* Header */}
             <header className="sticky top-0 z-10 glass-panel border-b border-white/10 px-4 py-3">
                 <div className="max-w-3xl mx-auto flex items-center justify-between">
                     <button
                         onClick={onClose}
                         className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                        aria-label="Cancel and close editor"
                     >
                         <X size={20} />
                         <span className="text-sm font-medium">Cancel</span>
@@ -141,8 +145,8 @@ export const StoryEditor: React.FC<StoryEditorProps> = ({
                         <button
                             onClick={() => setLanguage('en')}
                             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${language === 'en'
-                                    ? 'bg-cyan-500 text-white'
-                                    : 'bg-white/5 text-gray-400 hover:text-white'
+                                ? 'bg-cyan-500 text-white'
+                                : 'bg-white/5 text-gray-400 hover:text-white'
                                 }`}
                         >
                             English
@@ -150,8 +154,8 @@ export const StoryEditor: React.FC<StoryEditorProps> = ({
                         <button
                             onClick={() => setLanguage('ta')}
                             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${language === 'ta'
-                                    ? 'bg-orange-500 text-white'
-                                    : 'bg-white/5 text-gray-400 hover:text-white'
+                                ? 'bg-orange-500 text-white'
+                                : 'bg-white/5 text-gray-400 hover:text-white'
                                 }`}
                         >
                             தமிழ்
@@ -171,6 +175,7 @@ export const StoryEditor: React.FC<StoryEditorProps> = ({
                             <button
                                 onClick={removeCover}
                                 className="absolute top-3 right-3 p-2 bg-black/50 rounded-full text-white hover:bg-black/70 transition-colors"
+                                aria-label="Remove cover image"
                             >
                                 <X size={18} />
                             </button>

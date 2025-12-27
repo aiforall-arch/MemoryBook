@@ -150,11 +150,11 @@ export const EnhancedCommentsSheet: React.FC<EnhancedCommentsSheetProps> = ({
 
     return (
         <div
-            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-md"
             onClick={onClose}
         >
             <div
-                className="w-full max-w-lg bg-[#0B0F1A] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl flex flex-col h-[85vh] sm:h-auto sm:max-h-[600px] overflow-hidden animate-[slideUp_0.3s_ease-out]"
+                className="w-full max-w-lg bg-[#0B0F1A]/60 backdrop-blur-2xl border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl flex flex-col h-[85vh] sm:h-auto sm:max-h-[600px] overflow-hidden animate-[slideUp_0.3s_ease-out] shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)]"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}

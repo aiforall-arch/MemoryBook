@@ -3,18 +3,23 @@ import { Sidebar } from './components/Layout/Sidebar';
 import { BottomNav } from './components/Layout/BottomNav';
 import { RightPanel } from './components/Layout/RightPanel';
 import { MasonryGrid } from './components/Feed/MasonryGrid';
+import { PostCard } from './components/Feed/PostCard';
+import { FullscreenViewer } from './components/Feed/FullscreenViewer';
 import { EnhancedCommentsSheet } from './components/Feed/EnhancedCommentsSheet';
 import { ShareModal } from './components/Feed/ShareModal';
 import { EnhancedUploadModal } from './components/Upload/EnhancedUploadModal';
 import { ProfilePictureUploader } from './components/Upload/ProfilePictureUploader';
 import { WelcomeScreen } from './components/Auth/WelcomeScreen';
 import { NeonButton } from './components/UI/NeonButton';
-import { Camera } from 'lucide-react';
+import { Camera, PenSquare } from 'lucide-react';
 import { api, supabase } from './services/supabase';
 import { UserProfile, Post, ViewState, Story, StoryComment, CreateStoryInput } from './types';
 import { StoriesList } from './components/Stories/StoriesList';
 import { StoryReader } from './components/Stories/StoryReader';
 import { StoryEditor } from './components/Stories/StoryEditor';
+import { SkeletonLoader } from './components/UI/SkeletonLoader';
+import { AuthForm } from './components/Auth/AuthForm';
+import { useToast } from './components/UI/ToastNotification';
 
 // Simple Hero Component for Home View
 const HeroSection = () => (
@@ -53,9 +58,9 @@ const App: React.FC = () => {
 
   // Auth State
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isRecovery, setIsRecovery] = useState(false);
+  const { showToast, ToastComponent } = useToast();
 
   // Stories State (NEW - separate from existing logic)
   const [stories, setStories] = useState<Story[]>([]);
@@ -68,6 +73,13 @@ const App: React.FC = () => {
   // Welcome Screen State (NEW - separate from existing logic)
   const [showWelcome, setShowWelcome] = useState(true);
 
+  // Profile Edit State
+  const [isEditingBio, setIsEditingBio] = useState(false);
+  const [editedBio, setEditedBio] = useState('');
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [editedUsername, setEditedUsername] = useState('');
+  const [activeMemory, setActiveMemory] = useState<Post | null>(null);
+
   // 1. Check Session on Mount & Listen for Changes
   useEffect(() => {
     // If Supabase is not configured (missing keys), do not attempt to listen
@@ -79,6 +91,14 @@ const App: React.FC = () => {
     // Check active session
     const checkSession = async () => {
       console.log('APP: checkSession start');
+
+      // Handle Password Recovery URL
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('type') === 'recovery') {
+        setIsRecovery(true);
+        setView('login');
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       console.log('APP: getSession result', !!session);
 
@@ -117,6 +137,86 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // 2. Real-Time Memory Pulse
+  useEffect(() => {
+    if (!supabase || !user) return;
+
+    console.log('APP: Setting up Real-Time Memory Pulse');
+
+    const channel = supabase
+      .channel('memory-pulse')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'posts' },
+        () => {
+          console.log('Realtime change: posts');
+          fetchPosts(user.id);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'likes' },
+        () => {
+          console.log('Realtime change: likes');
+          fetchPosts(user.id);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'comments' },
+        () => {
+          console.log('Realtime change: comments');
+          fetchPosts(user.id);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'stories' },
+        (payload) => {
+          console.log('Realtime change: stories');
+          fetchStories();
+
+          // Update active story if it was the one changed
+          if (activeStory && (payload.new as any)?.id === activeStory.id) {
+            setActiveStory(payload.new as Story);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'story_likes' },
+        (payload) => {
+          console.log('Realtime change: story_likes');
+          fetchStories();
+
+          // Re-fetch active story comments/likes to be sure
+          if (activeStory && (payload.new as any)?.story_id === activeStory.id) {
+            fetchStories().then(newStories => {
+              const updated = newStories?.find(s => s.id === activeStory.id);
+              if (updated) setActiveStory(updated);
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'story_comments' },
+        (payload) => {
+          console.log('Realtime change: story_comments');
+          // Update active story comments if looking at that story
+          if (activeStory && (payload.new as any)?.story_id === activeStory.id) {
+            fetchStoryComments(activeStory.id);
+          }
+          fetchStories(); // Update counts in list
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, activeStory?.id]);
+
   // Fetch stories when view changes to 'stories'
   useEffect(() => {
     if (view === 'stories') {
@@ -131,25 +231,64 @@ const App: React.FC = () => {
     }
   }, [activeStory]);
 
-  const handleAuth = async () => {
-    console.log('APP: handleAuth start', { authMode, email });
+  const handleAuth = async (email: string, password?: string, mode?: 'login' | 'signup') => {
+    if (!email || !password) return;
     setIsLoading(true);
-    setAuthError('');
+    setAuthError(null);
     try {
-      if (authMode === 'login') {
-        console.log('APP: calling api.signIn');
-        await api.signIn(email, password);
-        console.log('APP: api.signIn returned');
-      } else {
+      if (mode === 'signup') {
         await api.signUp(email, password);
-        alert("Account created! Check your email to confirm, or if auto-confirm is on, you can now sign in.");
-        setAuthMode('login');
+        showToast('Verification email sent!', 'success');
+      } else {
+        await api.signIn(email, password);
       }
-    } catch (e: any) {
-      console.error("Auth failed", e);
-      setAuthError(e.message || "Authentication failed");
+    } catch (err: any) {
+      setAuthError(err.message || 'Authentication failed');
+      showToast(err.message || 'Auth failed', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (email: string) => {
+    setIsLoading(true);
+    setAuthError(null);
+    try {
+      await api.resetPassword(email);
+      showToast('Password reset link sent!', 'success');
+    } catch (err: any) {
+      setAuthError(err.message);
+      showToast('Failed to send reset link', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdatePassword = async (password: string) => {
+    setIsLoading(true);
+    try {
+      await api.updatePassword(password);
+      showToast('Password updated!', 'success');
+      setIsRecovery(false);
+    } catch (err: any) {
+      setAuthError(err.message);
+      showToast('Failed to update password', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSocialLogin = async (provider: 'google' | 'azure') => {
+    try {
+      await api.signInWithOAuth(provider);
+      // Profile generation is handled by Supabase Triggers or on next load
+      // But we can proactively try to fetch/init profile
+      setTimeout(async () => {
+        const profile = await api.getCurrentUser();
+        if (profile) setUser(profile);
+      }, 500);
+    } catch (err: any) {
+      showToast(`Failed to sign in with ${provider}`, 'error');
     }
   };
 
@@ -175,11 +314,24 @@ const App: React.FC = () => {
     if (!user) return;
     try {
       await api.toggleLike(postId, user.id);
-      // Optional: Refresh posts or update state locally
-      // For now, let's just refresh to be safe and accurate
-      fetchPosts();
+      // fetchPosts() is now handled by Real-time Memory Pulse
     } catch (e) {
       console.error("Error toggling like:", e);
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    if (!user) return;
+    if (!window.confirm("Are you sure you want to delete this memory?")) return;
+
+    try {
+      await api.deletePost(postId);
+      // Local removal for speed, Realtime will also sync
+      setPosts(prev => prev.filter(p => p.id !== postId));
+      showToast('Memory deleted', 'info');
+    } catch (e) {
+      console.error("Error deleting post:", e);
+      showToast('Failed to delete memory', 'error');
     }
   };
 
@@ -198,10 +350,10 @@ const App: React.FC = () => {
 
       setView('home');
       setIsUploadOpen(false); // Explicitly close modal
-      alert("Memory captured successfully! 📸✨");
+      showToast("Memory captured successfully! 📸✨", 'success');
     } catch (e) {
       console.error("Upload failed:", e);
-      alert("Failed to upload memory. Please try again.");
+      showToast("Failed to upload memory. Please try again.", 'error');
     }
   };
 
@@ -211,8 +363,10 @@ const App: React.FC = () => {
     try {
       const data = await api.getStories();
       setStories(data);
+      return data;
     } catch (e) {
       console.error("Error fetching stories:", e);
+      return [];
     } finally {
       setIsLoadingStories(false);
     }
@@ -238,12 +392,12 @@ const App: React.FC = () => {
         coverUrl = await api.uploadImage(coverFile); // Reuse uploadImage
       }
       await api.createStory(user.id, input, coverUrl);
-      fetchStories();
+      // fetchStories() is now handled by Real-time Memory Pulse
       setIsStoryEditorOpen(false);
-      alert("Story published successfully! 📖✨");
+      showToast("Story published successfully! 📖✨", 'success');
     } catch (e) {
       console.error("Error publishing story:", e);
-      alert("Failed to publish story.");
+      showToast("Failed to publish story.", 'error');
     }
   };
 
@@ -266,13 +420,35 @@ const App: React.FC = () => {
     if (!user || !activeStory) return;
     try {
       await api.addStoryComment(activeStory.id, user.id, content);
-      fetchStoryComments(activeStory.id);
-      // Update local stories count
-      setStories(prev => prev.map(s =>
-        s.id === activeStory.id ? { ...s, comments_count: s.comments_count + 1 } : s
-      ));
+      // fetchStoryComments and fetchStories counts are now handled by Real-time Memory Pulse
     } catch (e) {
       console.error("Error adding story comment:", e);
+    }
+  };
+
+  const handleUpdateBio = async () => {
+    if (!user) return;
+    try {
+      await api.updateProfile(user.id, { bio: editedBio });
+      setUser(prev => prev ? { ...prev, bio: editedBio } : null);
+      setIsEditingBio(false);
+      showToast('Bio updated successfully! ✨', 'success');
+    } catch (e) {
+      console.error("Failed to update bio:", e);
+      showToast('Failed to update bio. Please try again.', 'error');
+    }
+  };
+
+  const handleUpdateUsername = async () => {
+    if (!user || !editedUsername.trim()) return;
+    try {
+      await api.updateProfile(user.id, { username: editedUsername.trim() });
+      setUser(prev => prev ? { ...prev, username: editedUsername.trim() } : null);
+      setIsEditingUsername(false);
+      showToast('Username updated successfully! ✨', 'success');
+    } catch (e) {
+      console.error("Failed to update username:", e);
+      showToast('Failed to update username. Please try again.', 'error');
     }
   };
 
@@ -296,62 +472,41 @@ const App: React.FC = () => {
   if (view === 'login') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0B0F1A] p-4 relative overflow-hidden">
+        {ToastComponent}
         {/* Abstract Background Blobs */}
         <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[100px]"></div>
         <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-cyan-600/20 rounded-full blur-[100px]"></div>
 
-        <div className="w-full max-w-md glass-panel p-8 rounded-2xl border border-white/10 shadow-2xl relative z-10">
-          <div className="text-center mb-10">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-2xl mx-auto flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.4)] mb-6">
-              <span className="text-white text-3xl font-bold">M</span>
-            </div>
-            <h1 className="text-3xl font-bold text-white mb-2">
-              {authMode === 'login' ? 'Welcome Back' : 'Join MemoryBook'}
-            </h1>
-            <p className="text-gray-400">
-              {authMode === 'login' ? 'Enter the digital vault of memories.' : 'Start preserving your electric moments.'}
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="user@example.com"
-                className="w-full bg-[#0B0F1A]/50 border border-white/10 rounded-xl p-3 text-white focus:border-purple-500 focus:outline-none transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Password</label>
+        {isRecovery ? (
+          <div className="w-full max-w-md glass-panel p-8 rounded-2xl border border-white/10 shadow-2xl relative z-10">
+            <h2 className="text-2xl font-bold text-white mb-6">Set New Password</h2>
+            <div className="space-y-4">
               <input
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="New Password"
                 className="w-full bg-[#0B0F1A]/50 border border-white/10 rounded-xl p-3 text-white focus:border-purple-500 focus:outline-none transition-colors"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleUpdatePassword(e.currentTarget.value);
+                }}
               />
+              <NeonButton fullWidth onClick={() => {
+                const input = document.querySelector('input[type="password"]') as HTMLInputElement;
+                handleUpdatePassword(input.value);
+              }} isLoading={isLoading}>
+                Update Password
+              </NeonButton>
             </div>
-
-            {authError && <p className="text-red-400 text-sm text-center">{authError}</p>}
-
-            <NeonButton fullWidth onClick={handleAuth} isLoading={isLoading}>
-              {authMode === 'login' ? 'Enter MemoryBook' : 'Create Account'}
-            </NeonButton>
           </div>
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-500">
-              {authMode === 'login' ? (
-                <>New here? <button onClick={() => setAuthMode('signup')} className="text-cyan-400 hover:underline">Create an account</button></>
-              ) : (
-                <>Already have an account? <button onClick={() => setAuthMode('login')} className="text-cyan-400 hover:underline">Welcome back</button></>
-              )}
-            </p>
-          </div>
-        </div>
+        ) : (
+          <AuthForm
+            initialMode={authMode}
+            onAuth={handleAuth}
+            onResetPassword={handleResetPassword}
+            onSocialLogin={handleSocialLogin}
+            isLoading={isLoading}
+            error={authError}
+          />
+        )}
       </div>
     );
   }
@@ -397,13 +552,20 @@ const App: React.FC = () => {
                   </select>
                 </div>
               </div>
-              <MasonryGrid
-                posts={posts}
-                isLoading={isLoading}
-                onLike={handleToggleLike}
-                onComment={(id) => setActiveCommentPostId(id)}
-                onShare={(post) => setActiveSharePost(post)}
-              />
+              {isLoading ? (
+                <SkeletonLoader count={6} />
+              ) : (
+                <MasonryGrid
+                  posts={posts}
+                  isLoading={isLoading}
+                  onLike={handleToggleLike}
+                  onComment={(id) => setActiveCommentPostId(id)}
+                  onShare={(post) => setActiveSharePost(post)}
+                  onView={(post) => setActiveMemory(post)}
+                  onDelete={handleDeletePost}
+                  currentUserId={user?.id}
+                />
+              )}
               {!isLoading && (
                 <div className="mt-12 text-center">
                   <NeonButton variant="secondary" onClick={fetchPosts}>Refresh Memories</NeonButton>
@@ -418,13 +580,20 @@ const App: React.FC = () => {
               <p className="text-gray-400">Discover public memories from around the world.</p>
               {/* Reusing Masonry for demo */}
               <div className="mt-8">
-                <MasonryGrid
-                  posts={posts.slice().reverse()}
-                  isLoading={isLoading}
-                  onLike={handleToggleLike}
-                  onComment={(id) => setActiveCommentPostId(id)}
-                  onShare={(post) => setActiveSharePost(post)}
-                />
+                {isLoading ? (
+                  <SkeletonLoader count={6} />
+                ) : (
+                  <MasonryGrid
+                    posts={posts.slice().reverse()}
+                    isLoading={isLoading}
+                    onLike={handleToggleLike}
+                    onComment={(id) => setActiveCommentPostId(id)}
+                    onShare={(post) => setActiveSharePost(post)}
+                    onView={(post) => setActiveMemory(post)}
+                    onDelete={handleDeletePost}
+                    currentUserId={user?.id}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -458,8 +627,63 @@ const App: React.FC = () => {
                   <Camera className="text-white" size={24} />
                 </div>
               </div>
-              <h1 className="text-3xl font-bold text-white mb-2">{user?.username}</h1>
-              <p className="text-gray-400 mb-8 max-w-md text-center">{user?.bio}</p>
+              {isEditingUsername ? (
+                <div className="flex gap-2 mb-4 items-center">
+                  <input
+                    type="text"
+                    value={editedUsername}
+                    onChange={(e) => setEditedUsername(e.target.value)}
+                    className="bg-[#0B0F1A] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                    placeholder="Enter new username"
+                  />
+                  <NeonButton variant="primary" onClick={handleUpdateUsername}>Save</NeonButton>
+                  <button onClick={() => setIsEditingUsername(false)} className="text-gray-400 hover:text-white px-2">Cancel</button>
+                </div>
+              ) : (
+                <div className="group relative">
+                  <h1 className="text-3xl font-bold text-white mb-2">{user?.username}</h1>
+                  <button
+                    onClick={() => {
+                      setEditedUsername(user?.username || '');
+                      setIsEditingUsername(true);
+                    }}
+                    className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 transition-opacity text-purple-400 hover:text-purple-300"
+                    title="Edit Username"
+                  >
+                    <PenSquare size={16} />
+                  </button>
+                </div>
+              )}
+
+              {isEditingBio ? (
+                <div className="w-full max-w-md mb-8">
+                  <textarea
+                    value={editedBio}
+                    onChange={(e) => setEditedBio(e.target.value)}
+                    className="w-full bg-[#0B0F1A] border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors resize-none mb-4"
+                    placeholder="Tell us your story..."
+                    rows={3}
+                  />
+                  <div className="flex gap-2 justify-center">
+                    <NeonButton variant="primary" onClick={handleUpdateBio}>Save Bio</NeonButton>
+                    <NeonButton variant="secondary" onClick={() => setIsEditingBio(false)}>Cancel</NeonButton>
+                  </div>
+                </div>
+              ) : (
+                <div className="group relative">
+                  <p className="text-gray-400 mb-8 max-w-md text-center">{user?.bio || "No bio yet. Tap to add one."}</p>
+                  <button
+                    onClick={() => {
+                      setEditedBio(user?.bio || '');
+                      setIsEditingBio(true);
+                    }}
+                    className="absolute -right-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity text-purple-400 hover:text-purple-300"
+                    title="Edit Bio"
+                  >
+                    <PenSquare size={16} />
+                  </button>
+                </div>
+              )}
 
               <div className="flex gap-8 mb-12 border-b border-white/10 pb-8">
                 <div className="text-center"><span className="block text-2xl font-bold text-white">{user?.stats.posts}</span><span className="text-xs text-gray-500 uppercase">Posts</span></div>
@@ -474,6 +698,9 @@ const App: React.FC = () => {
                   isLoading={false}
                   onLike={handleToggleLike}
                   onComment={(id) => setActiveCommentPostId(id)}
+                  onView={(post) => setActiveMemory(post)}
+                  onDelete={handleDeletePost}
+                  currentUserId={user?.id}
                 />
               </div>
             </div>
@@ -521,6 +748,19 @@ const App: React.FC = () => {
         isOpen={!!activeSharePost}
         onClose={() => setActiveSharePost(null)}
       />
+
+      {/* Fullscreen Viewer (Lightbox) */}
+      {activeMemory && (
+        <FullscreenViewer
+          post={activeMemory}
+          onClose={() => setActiveMemory(null)}
+          onLike={handleToggleLike}
+          onComment={(id) => {
+            setActiveMemory(null);
+            setActiveCommentPostId(id);
+          }}
+        />
+      )}
 
       {/* Stories Components (NEW) */}
       {activeStory && (

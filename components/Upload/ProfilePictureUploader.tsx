@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Camera, ZoomIn, ZoomOut, Trash2, Check, User } from 'lucide-react';
 import { NeonButton } from '../UI/NeonButton';
 import { GlassCard } from '../UI/GlassCard';
+import { useToast } from '../UI/ToastNotification';
 import imageCompression from 'browser-image-compression';
 
 interface ProfilePictureUploaderProps {
@@ -26,6 +27,7 @@ export const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const { showToast, ToastComponent } = useToast();
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -176,14 +178,14 @@ export const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({
 
             ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
 
-            // Convert to file
+            // Convert to file (JPEG for storage efficiency)
             canvas.toBlob(async (blob) => {
                 if (blob) {
-                    const file = new File([blob], `avatar_${Date.now()}.png`, { type: 'image/png' });
+                    const file = new File([blob], `avatar_${Date.now()}.jpg`, { type: 'image/jpeg' });
                     await onSave(file);
                     onClose();
                 }
-            }, 'image/png');
+            }, 'image/jpeg', 0.8);
         } catch (error) {
             console.error('Error saving profile picture:', error);
         } finally {
@@ -203,6 +205,7 @@ export const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            {ToastComponent}
             <GlassCard className="w-full max-w-md relative animate-[fadeIn_0.3s_ease-out]">
                 {/* Close button */}
                 <button
