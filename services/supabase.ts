@@ -6,10 +6,21 @@ import { ENV } from '../src/env';
 // SUPABASE CLIENT (PRODUCTION SAFE)
 // ------------------------------------------------------------------
 
-export const supabase = createClient(
-  ENV.SUPABASE_URL,
-  ENV.SUPABASE_KEY
-);
+// Singleton pattern to prevent multiple instances during development/HMR
+let supabaseInstance;
+
+// @ts-ignore
+if (import.meta.env.DEV) {
+  const globalAny: any = window;
+  if (!globalAny._supabaseInstance) {
+    globalAny._supabaseInstance = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_KEY);
+  }
+  supabaseInstance = globalAny._supabaseInstance;
+} else {
+  supabaseInstance = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_KEY);
+}
+
+export const supabase = supabaseInstance;
 
 // ------------------------------------------------------------------
 // HELPERS
@@ -104,39 +115,28 @@ export const api = {
       console.log('SUPABASE: 1/3 - fetching profile (with 15s timeout)...');
 
       // Run all queries in parallel for faster loading
-      const [profileResult, postsResult, userPostsResult] = await Promise.all([
-        // Profile query
-        withTimeout(supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(), 15000)
+      // Run optimized queries
+      // We prioritize the profile. Stats are secondary and shouldn't block login if they timeout.
+      const [profileResult, backendStats] = await Promise.all([
+        // 1. Profile query (Critical)
+        withTimeout(supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(), 10000)
           .catch((err) => {
             console.warn('SUPABASE: profile fetch error/timeout', err.message);
             return { data: null, error: err };
           }) as Promise<{ data: any; error: any }>,
-        // Posts count query
-        withTimeout(supabase.from('posts').select('*', { count: 'exact', head: true }).eq('user_id', user.id), 15000)
-          .catch((err) => {
-            console.warn('SUPABASE: posts count error/timeout', err.message);
-            return { count: 0, error: err };
-          }) as Promise<{ count: number | null; error: any }>,
-        // User posts IDs query
-        withTimeout(supabase.from('posts').select('id').eq('user_id', user.id), 15000)
-          .catch((err) => {
-            console.warn('SUPABASE: user posts error/timeout', err.message);
-            return { data: [], error: err };
-          }) as Promise<{ data: any[]; error: any }>
+
+        // 2. Posts count (Non-critical, lightweight count)
+        // We use 'exact' but with a shorter timeout. If it fails, we default to 0.
+        withTimeout(supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id), 5000)
+          .catch(() => ({ count: 0, error: null })) as Promise<{ count: number | null; error: any }>
       ]);
 
-      console.log('SUPABASE: All queries completed', {
-        hasProfile: !!profileResult.data,
-        postsCount: postsResult.count,
-        userPostsCount: userPostsResult.data?.length
-      });
-
       let profile = profileResult.data;
-      const postsCount = postsResult.count;
-      const userPosts = userPostsResult.data;
+      const postsCount = backendStats.count || 0;
 
       // --- AUTO-INITIALIZE PROFILE (NEW) ---
-      if (!profile) {
+      // Only auto-init if we successfully queried (no error) but found no row (profile is null)
+      if (!profile && !profileResult.error) {
         console.log('SUPABASE: Profile missing, auto-initializing...');
         const metadata = user.user_metadata || {};
         const initialUsername = metadata.full_name || metadata.name || user.email?.split('@')[0] || 'Member';
@@ -159,27 +159,27 @@ export const api = {
           profile = newProfile;
           console.log('SUPABASE: Profile auto-initialized successfully');
         }
+      } else if (!profile && profileResult.error) {
+        console.error('SUPABASE: Profile fetch failed, skipping auto-init');
+        return null;
       }
       // -------------------------------------
 
       // Fetch total likes received on all user's posts
-      let totalLikes = 0;
-      if (userPosts && userPosts.length > 0) {
-        console.log('SUPABASE: fetching total likes for posts...');
-        const postIds = userPosts.map(p => p.id);
-        const { count: likesCount, error: likesError } = await supabase
-          .from('likes')
-          .select('*', { count: 'exact', head: true })
-          .in('post_id', postIds);
-        console.log('SUPABASE: likes result', { count: likesCount, error: likesError });
-        totalLikes = likesCount || 0;
-      }
+      // Fetch total likes received on all user's posts
+      // Optimization: Skipping exact like count for now to speed up login
+      const totalLikes = 0;
 
       return {
         id: user.id,
         username: profile?.username || user.email?.split('@')[0] || 'User',
         avatar_url: profile?.avatar_url || `https://ui-avatars.com/api/?name=${user.email?.split('@')[0] || 'User'}&background=random`,
         bio: profile?.bio || '',
+        onboarding_completed_at: profile?.onboarding_completed_at,
+        display_name: profile?.display_name,
+        date_of_birth: profile?.date_of_birth,
+        relationship_tags: profile?.relationship_tags,
+        first_memory_id: profile?.first_memory_id,
         joined_at: profile?.updated_at || user.created_at || new Date().toISOString(),
         stats: {
           posts: postsCount || 0,
@@ -251,6 +251,7 @@ export const api = {
         caption,
         created_at,
         user_id,
+        badges,
         likes!left (
           user_id
         )
@@ -300,6 +301,7 @@ export const api = {
         likes_count: item.likes?.length || 0,
         comments_count: commentsMap[item.id] || 0,
         is_liked: currentUserId ? item.likes?.some((l: any) => l.user_id === currentUserId) : false,
+        badges: item.badges || [],
         comments: []
       };
     });
@@ -367,12 +369,29 @@ export const api = {
     return data.publicUrl;
   },
 
-  createPost: async (userId: string, imageUrl: string, caption: string) => {
-    const { error } = await supabase
-      .from('posts')
-      .insert({ user_id: userId, image_url: imageUrl, caption });
-
-    if (error) throw error;
+  createPost: async (userId: string, imageUrl: string, caption: string, badges: string[] = []): Promise<string> => {
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .insert({ user_id: userId, image_url: imageUrl, caption, badges })
+        .select('id')
+        .single();
+      if (error) throw error;
+      return data.id;
+    } catch (err: any) {
+      // Fallback: If 'badges' column causes error (schema mismatch), try without it
+      if (err.code === '42703' || err.message?.includes('badges')) { // undefined_column
+        console.warn('SUPABASE: Badges column missing, retrying without badges...');
+        const { data, error } = await supabase
+          .from('posts')
+          .insert({ user_id: userId, image_url: imageUrl, caption })
+          .select('id')
+          .single();
+        if (error) throw error;
+        return data.id;
+      }
+      throw err;
+    }
   },
 
   deletePost: async (postId: string) => {
@@ -417,11 +436,29 @@ export const api = {
     return publicUrl;
   },
 
-  updateProfile: async (userId: string, updates: { username?: string; bio?: string }) => {
+  updateProfile: async (userId: string, updates: Partial<UserProfile>) => {
     const { error } = await supabase
       .from('profiles')
       .update({
         ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+  },
+
+  completeOnboarding: async (userId: string, data: any) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        display_name: data.displayName,
+        date_of_birth: data.dateOfBirth,
+        relationship_tags: data.relationshipTags,
+        relationship_note: data.relationshipNote,
+        onboarding_completed_at: new Date().toISOString(),
+        first_memory_id: data.firstMemoryId,
+        avatar_url: data.avatarUrl,
         updated_at: new Date().toISOString()
       })
       .eq('id', userId);

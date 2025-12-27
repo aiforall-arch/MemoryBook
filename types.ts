@@ -9,6 +9,12 @@ export interface UserProfile {
     likes: number;
     friends: number;
   };
+  display_name?: string;
+  date_of_birth?: string;
+  relationship_tags?: string[];
+  relationship_note?: string;
+  onboarding_completed_at?: string;
+  first_memory_id?: string;
 }
 
 export interface PostComment {
@@ -31,10 +37,11 @@ export interface Post {
   likes_count: number;
   comments_count: number;
   is_liked: boolean;
+  badges?: string[];
   comments?: PostComment[];
 }
 
-export type ViewState = 'home' | 'explore' | 'profile' | 'login' | 'upload' | 'stories';
+export type ViewState = 'home' | 'explore' | 'profile' | 'login' | 'upload' | 'stories' | 'onboarding';
 
 // ============================================
 // STORIES FEATURE (NEW - Bilingual Long-Form)

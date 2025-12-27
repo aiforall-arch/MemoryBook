@@ -20,6 +20,7 @@ import { StoryEditor } from './components/Stories/StoryEditor';
 import { SkeletonLoader } from './components/UI/SkeletonLoader';
 import { AuthForm } from './components/Auth/AuthForm';
 import { useToast } from './components/UI/ToastNotification';
+import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 
 // Simple Hero Component for Home View
 const HeroSection = () => (
@@ -108,8 +109,15 @@ const App: React.FC = () => {
         console.log('APP: currentUser fetched', currentUser);
         if (currentUser) {
           setUser(currentUser);
-          setView('home');
-          fetchPosts(currentUser.id);
+
+          // Check Onboarding Status (NEW)
+          if (!currentUser.onboarding_completed_at) {
+            console.log('APP: Onboarding incomplete, redirecting...');
+            setView('onboarding');
+          } else {
+            setView('home');
+            fetchPosts(currentUser.id);
+          }
         }
       }
     };
@@ -123,8 +131,14 @@ const App: React.FC = () => {
         console.log('APP: SIGNED_IN detected, fetching profile');
         const currentUser = await api.getCurrentUser(session.user);
         setUser(currentUser);
-        setView('home');
-        if (currentUser) fetchPosts(currentUser.id);
+
+        // Check Onboarding Status (NEW)
+        if (currentUser && !currentUser.onboarding_completed_at) {
+          setView('onboarding');
+        } else if (currentUser) {
+          setView('home');
+          fetchPosts(currentUser.id);
+        }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setView('login');
@@ -451,6 +465,25 @@ const App: React.FC = () => {
       showToast('Failed to update username. Please try again.', 'error');
     }
   };
+
+  // --- ONBOARDING FLOW (NEW) ---
+  if (view === 'onboarding' && user) {
+    return (
+      <div className="min-h-screen bg-[#0B0F1A]">
+        <OnboardingFlow
+          user={user}
+          onComplete={async () => {
+            // Refresh user data to get updated onboarding status
+            const updatedUser = await api.getCurrentUser(user as any); // Optimistic hack or re-fetch
+            setUser(updatedUser);
+            setView('home');
+            if (updatedUser) fetchPosts(updatedUser.id);
+            showToast("Welcome to the family! 💜", "success");
+          }}
+        />
+      </div>
+    );
+  }
 
   // --- WELCOME SCREEN (NEW - shown before login) ---
   if (view === 'login' && showWelcome) {
