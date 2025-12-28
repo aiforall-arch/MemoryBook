@@ -22,26 +22,7 @@ import { AuthForm } from './components/Auth/AuthForm';
 import { useToast } from './components/UI/ToastNotification';
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
 
-// Simple Hero Component for Home View
-const HeroSection = () => (
-  <div className="relative rounded-3xl overflow-hidden mb-12 p-8 md:p-16 text-center md:text-left min-h-[300px] flex items-center">
-    <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/80 via-purple-900/80 to-slate-900/80 z-10"></div>
-    <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-40"></div>
-    <div className="relative z-20 max-w-2xl">
-      <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 tracking-tight">
-        Capture the <span className="neon-text">Electric</span> Moments
-      </h1>
-      <p className="text-lg text-gray-200 mb-8 leading-relaxed">
-        A futuristic collaborative space for you and your friends.
-        Share memories in high fidelity, preserved in a digital glass vault.
-      </p>
-      <div className="flex gap-4 justify-center md:justify-start">
-        <NeonButton>Start Exploring</NeonButton>
-        <NeonButton variant="secondary">Read Manifesto</NeonButton>
-      </div>
-    </div>
-  </div>
-);
+import { MemorialHero } from './components/Feed/MemorialHero';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('login');
@@ -66,6 +47,7 @@ const App: React.FC = () => {
   // Stories State (NEW - separate from existing logic)
   const [stories, setStories] = useState<Story[]>([]);
   const [activeStory, setActiveStory] = useState<Story | null>(null);
+  const [openStoryComments, setOpenStoryComments] = useState(false);
   const [isStoryEditorOpen, setIsStoryEditorOpen] = useState(false);
   const [storyComments, setStoryComments] = useState<StoryComment[]>([]);
   const [isLoadingStories, setIsLoadingStories] = useState(false);
@@ -398,33 +380,60 @@ const App: React.FC = () => {
     }
   };
 
+  /* -------------------------------------------------------------------------- */
+  /*                             STORY HANDLERS                                 */
+  /* -------------------------------------------------------------------------- */
+
   const handlePublishStory = async (input: CreateStoryInput, coverFile?: File) => {
     if (!user) return;
     try {
       let coverUrl = '';
       if (coverFile) {
-        coverUrl = await api.uploadImage(coverFile); // Reuse uploadImage
+        coverUrl = await api.uploadImage(coverFile);
       }
       await api.createStory(user.id, input, coverUrl);
-      // fetchStories() is now handled by Real-time Memory Pulse
+
+      const freshStories = await api.getStories();
+      setStories(freshStories);
+
       setIsStoryEditorOpen(false);
-      showToast("Story published successfully! 📖✨", 'success');
-    } catch (e) {
-      console.error("Error publishing story:", e);
-      showToast("Failed to publish story.", 'error');
+      showToast('Story published successfully!', 'success');
+    } catch (e: any) {
+      console.error('Failed to publish story:', e);
+      showToast('Failed to publish story', 'error');
     }
   };
 
-  const handleLikeStory = async () => {
-    if (!user || !activeStory) return;
+  const handleDeleteStory = async (storyId: string) => {
     try {
-      await api.likeStory(activeStory.id, user.id);
+      await api.deleteStory(storyId);
+      setStories(prev => prev.filter(s => s.id !== storyId));
+      if (activeStory?.id === storyId) {
+        setActiveStory(null);
+      }
+      showToast('Story deleted successfully', 'success');
+    } catch (e) {
+      console.error('Failed to delete story:', e);
+      showToast('Failed to delete story', 'error');
+    }
+  };
+
+  const handleToggleStoryLike = async (storyId: string) => {
+    if (!user) return;
+    try {
+      await api.likeStory(storyId, user.id);
       // Update local state for immediate feedback
       setStories(prev => prev.map(s =>
-        s.id === activeStory.id
+        s.id === storyId
           ? { ...s, likes_count: s.is_liked ? s.likes_count - 1 : s.likes_count + 1, is_liked: !s.is_liked }
           : s
       ));
+
+      // Also update active story if it matches
+      if (activeStory && activeStory.id === storyId) {
+        setActiveStory(prev => prev ? { ...prev, likes_count: prev.is_liked ? prev.likes_count - 1 : prev.likes_count + 1, is_liked: !prev.is_liked } : null);
+      }
+
     } catch (e) {
       console.error("Error liking story:", e);
     }
@@ -575,7 +584,7 @@ const App: React.FC = () => {
 
           {view === 'home' && (
             <>
-              <HeroSection />
+              <MemorialHero />
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-2xl font-bold text-white">Latest Memories</h2>
                 <div className="flex gap-2">
@@ -609,8 +618,8 @@ const App: React.FC = () => {
 
           {view === 'explore' && (
             <div className="text-center py-20">
-              <h2 className="text-3xl font-bold text-white mb-4">Explore the Vault</h2>
-              <p className="text-gray-400">Discover public memories from around the world.</p>
+              <h2 className="text-3xl font-bold text-white mb-4">Some Moments Never Leave</h2>
+              <p className="text-gray-400">They wait here, quietly, to be remembered.</p>
               {/* Reusing Masonry for demo */}
               <div className="mt-8">
                 {isLoading ? (
@@ -639,10 +648,19 @@ const App: React.FC = () => {
               onStoryClick={(story) => {
                 // Fetch full story with like status
                 api.getStory(story.id, user?.id).then(fullStory => {
-                  if (fullStory) setActiveStory(fullStory);
+                  // Ensure we set active story even if fetch fails slightly, using list data as fallback
+                  setActiveStory(fullStory || story);
                 });
               }}
               onCreateStory={() => setIsStoryEditorOpen(true)}
+              onLike={(story) => handleToggleStoryLike(story.id)}
+              onComment={(story) => {
+                setActiveStory(story);
+                setOpenStoryComments(true);
+                api.getStory(story.id, user?.id).then(fullStory => {
+                  if (fullStory) setActiveStory(fullStory);
+                });
+              }}
             />
           )}
 
@@ -802,9 +820,11 @@ const App: React.FC = () => {
           user={user}
           comments={storyComments}
           isLoadingComments={isLoadingStoryComments}
-          onClose={() => setActiveStory(null)}
-          onLike={handleLikeStory}
+          onClose={() => { setActiveStory(null); setOpenStoryComments(false); }}
+          onLike={() => activeStory && handleToggleStoryLike(activeStory.id)}
           onAddComment={handleAddStoryComment}
+          onDelete={handleDeleteStory}
+          initialShowComments={openStoryComments}
         />
       )}
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Sparkles } from 'lucide-react';
 import { Post } from '../../types';
 import { GlassCard } from '../UI/GlassCard';
 
@@ -63,29 +63,39 @@ export const PostCard: React.FC<PostCardProps> = ({
           <div className="relative">
             <button
               aria-label="More options"
-              className="text-gray-400 hover:text-white p-2 transition-colors"
-              onClick={() => setShowMenu(!showMenu)}
+              className="text-gray-400 hover:text-white p-2 transition-colors rounded-full hover:bg-white/5"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowMenu(!showMenu);
+              }}
             >
               <MoreHorizontal size={20} />
             </button>
 
             {showMenu && (
-              <div className="absolute right-0 mt-2 w-48 glass-panel border border-white/10 rounded-xl py-2 shadow-2xl z-20 animate-[fadeIn_0.2s_ease-out]">
+              <div
+                className="absolute right-0 mt-2 w-48 glass-panel border border-white/10 rounded-xl py-2 shadow-2xl z-20 animate-in fade-in zoom-in-95 duration-200"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <button
-                  className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
                   onClick={handleCopyLink}
                 >
-                  Copy Memory Link
+                  <Share2 size={14} /> Copy Link
                 </button>
+
                 {currentUserId === post.user_id && (
                   <button
-                    className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors"
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors flex items-center gap-2"
                     onClick={() => {
-                      onDelete?.(post.id);
+                      if (confirm('Are you sure you want to delete this memory?')) {
+                        onDelete?.(post.id);
+                      }
                       setShowMenu(false);
                     }}
                   >
-                    Delete Memory
+                    <Sparkles size={14} className="rotate-45" /> Delete Memory
                   </button>
                 )}
               </div>

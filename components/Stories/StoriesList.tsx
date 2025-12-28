@@ -18,7 +18,9 @@ export const StoriesList: React.FC<StoriesListProps> = ({
     isLoading,
     user,
     onStoryClick,
-    onCreateStory
+    onCreateStory,
+    onLike,
+    onComment
 }) => {
     const [languageFilter, setLanguageFilter] = useState<'all' | 'en' | 'ta'>('all');
 
@@ -40,8 +42,8 @@ export const StoriesList: React.FC<StoriesListProps> = ({
                         <BookOpen className="text-purple-400" size={28} />
                         Exclusive Stories
                     </h1>
-                    <p className="text-gray-400 mt-1">
-                        Long-form memories written from the heart
+                    <p className="text-gray-400 mt-1 italic">
+                        Some memories need more than an image. They need words that stay.
                     </p>
                 </div>
 
@@ -113,6 +115,8 @@ export const StoriesList: React.FC<StoriesListProps> = ({
                             key={story.id}
                             story={story}
                             onClick={() => onStoryClick(story)}
+                            onLike={() => onLike(story)}
+                            onComment={() => onComment(story)}
                         />
                     ))}
                 </div>

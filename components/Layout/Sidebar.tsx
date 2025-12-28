@@ -81,6 +81,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onL
           </div>
           <span className="hidden lg:block font-medium">Logout</span>
         </button>
+
+        {/* Quiet Dedication */}
+        <div className="mt-8 px-4 text-center hidden lg:block">
+          <p className="text-[10px] text-gray-600 font-serif italic leading-relaxed">
+            This memory vault was created in loving remembrance of a friend
+            whose absence taught us the value of presence.
+          </p>
+        </div>
       </div>
     </div>
   );

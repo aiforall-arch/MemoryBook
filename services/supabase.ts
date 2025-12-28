@@ -119,7 +119,7 @@ export const api = {
       // We prioritize the profile. Stats are secondary and shouldn't block login if they timeout.
       const [profileResult, backendStats] = await Promise.all([
         // 1. Profile query (Critical)
-        withTimeout(supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(), 10000)
+        withTimeout(supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(), 20000)
           .catch((err) => {
             console.warn('SUPABASE: profile fetch error/timeout', err.message);
             return { data: null, error: err };
@@ -160,8 +160,13 @@ export const api = {
           console.log('SUPABASE: Profile auto-initialized successfully');
         }
       } else if (!profile && profileResult.error) {
-        console.error('SUPABASE: Profile fetch failed, skipping auto-init');
-        return null;
+        console.warn('SUPABASE: Profile fetch failed/timed out, using fallback profile', profileResult.error);
+        // Fallback: Use Auth User data so login doesn't fail
+        profile = {
+          username: user.email?.split('@')[0] || 'User',
+          avatar_url: user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user.email || 'User'}&background=random`,
+          updated_at: new Date().toISOString()
+        };
       }
       // -------------------------------------
 
@@ -189,6 +194,16 @@ export const api = {
       };
     } catch (e) {
       console.error('SUPABASE: getCurrentUser unexpected error', e);
+      // Last resort fallback
+      if (existingUser) {
+        return {
+          id: existingUser.id,
+          username: existingUser.email?.split('@')[0] || 'User',
+          avatar_url: `https://ui-avatars.com/api/?name=${existingUser.email || 'User'}&background=random`,
+          joined_at: new Date().toISOString(),
+          stats: { posts: 0, likes: 0, friends: 0 }
+        };
+      }
       return null;
     }
   },
@@ -548,8 +563,10 @@ export const api = {
       isLiked = !!likeData;
     }
 
-    // Increment read count (non-intrusive)
-    supabase.rpc('increment_story_read_count', { story_id: storyId }).then(() => { });
+    // Increment read count (non-intrusive) - RPC not yet created
+    // supabase.rpc('increment_story_read_count', { story_id: storyId })
+    //   .then(() => { })
+    //   .catch(err => console.warn('Supabase RPC increment_story_read_count failed (non-critical):', err.message));
 
     return {
       id: data.id,
@@ -605,6 +622,30 @@ export const api = {
     }
   },
 
+  deleteStory: async (storyId: string) => {
+    // 1. Delete comments
+    const { error: commentsError } = await supabase
+      .from('story_comments')
+      .delete()
+      .eq('story_id', storyId);
+    if (commentsError) console.warn('SUPABASE: Error deleting story comments', commentsError);
+
+    // 2. Delete likes
+    const { error: likesError } = await supabase
+      .from('story_likes')
+      .delete()
+      .eq('story_id', storyId);
+    if (likesError) console.warn('SUPABASE: Error deleting story likes', likesError);
+
+    // 3. Delete story
+    const { error } = await supabase
+      .from('stories')
+      .delete()
+      .eq('id', storyId);
+
+    if (error) throw error;
+  },
+
   getStoryComments: async (storyId: string): Promise<StoryComment[]> => {
     const { data, error } = await supabase
       .from('story_comments')
@@ -654,37 +695,54 @@ export const api = {
 
   // 7. Sidebar & Social Features
   getRecentActivity: async (userId: string) => {
-    // Fetch likes and comments on user's posts
-    const { data: userPosts } = await supabase.from('posts').select('id, caption').eq('user_id', userId);
-    if (!userPosts || userPosts.length === 0) return [];
+    try {
+      // Fetch likes and comments on user's posts
+      const { data: userPosts } = await supabase.from('posts').select('id, caption').eq('user_id', userId);
+      if (!userPosts || userPosts.length === 0) return [];
 
-    const postIds = userPosts.map(p => p.id);
-    const postMap = userPosts.reduce((acc: any, p) => { acc[p.id] = p.caption; return acc; }, {});
+      const postIds = userPosts.map(p => p.id).slice(0, 20); // Limit to 20 recent posts to avoid URL overflow
+      const postMap = userPosts.reduce((acc: any, p) => { acc[p.id] = p.caption; return acc; }, {});
 
-    const [likesResult, commentsResult] = await Promise.all([
-      supabase.from('likes').select('user_id, created_at, post_id').in('post_id', postIds).neq('user_id', userId).order('created_at', { ascending: false }).limit(5),
-      supabase.from('comments').select('user_id, created_at, post_id, content').in('post_id', postIds).neq('user_id', userId).order('created_at', { ascending: false }).limit(5)
-    ]);
+      if (postIds.length === 0) return [];
 
-    const allActivity = [
-      ...(likesResult.data || []).map(l => ({ ...l, type: 'like' })),
-      ...(commentsResult.data || []).map(c => ({ ...c, type: 'comment' }))
-    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
+      const [likesResult, commentsResult] = await Promise.all([
+        supabase.from('likes')
+          .select('user_id, created_at, post_id')
+          .in('post_id', postIds)
+          .neq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase.from('comments')
+          .select('user_id, created_at, post_id, content')
+          .in('post_id', postIds)
+          .neq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(5)
+      ]);
 
-    if (allActivity.length === 0) return [];
+      const allActivity = [
+        ...(likesResult.data || []).map(l => ({ ...l, type: 'like' })),
+        ...(commentsResult.data || []).map(c => ({ ...c, type: 'comment' }))
+      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
 
-    const actorIds = Array.from(new Set(allActivity.map(a => a.user_id)));
-    const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', actorIds);
-    const profileMap = (profiles || []).reduce((acc: any, p) => { acc[p.id] = p; return acc; }, {});
+      if (allActivity.length === 0) return [];
 
-    return allActivity.map((act: any) => ({
-      id: `${act.type}-${act.created_at}-${act.user_id}`,
-      username: profileMap[act.user_id]?.username || 'Someone',
-      avatar_url: profileMap[act.user_id]?.avatar_url,
-      type: act.type,
-      target_post_caption: postMap[act.post_id] || 'your photo',
-      created_at: act.created_at
-    }));
+      const actorIds = Array.from(new Set(allActivity.map(a => a.user_id)));
+      const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', actorIds);
+      const profileMap = (profiles || []).reduce((acc: any, p) => { acc[p.id] = p; return acc; }, {});
+
+      return allActivity.map((act: any) => ({
+        id: `${act.type}-${act.created_at}-${act.user_id}`,
+        username: profileMap[act.user_id]?.username || 'Someone',
+        avatar_url: profileMap[act.user_id]?.avatar_url,
+        type: act.type,
+        target_post_caption: postMap[act.post_id] || 'your photo',
+        created_at: act.created_at
+      }));
+    } catch (e) {
+      console.warn('SUPABASE: getRecentActivity error', e);
+      return [];
+    }
   },
 
   getSuggestedUsers: async (userId: string) => {

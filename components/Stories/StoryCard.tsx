@@ -6,6 +6,8 @@ import { GlassCard } from '../UI/GlassCard';
 interface StoryCardProps {
     story: Story;
     onClick: () => void;
+    onLike: (e: React.MouseEvent) => void;
+    onComment: (e: React.MouseEvent) => void;
 }
 
 // Calculate reading time based on content length
@@ -20,7 +22,7 @@ const getLanguageLabel = (lang: 'en' | 'ta'): string => {
     return lang === 'en' ? 'EN' : 'TA';
 };
 
-export const StoryCard: React.FC<StoryCardProps> = ({ story, onClick }) => {
+export const StoryCard: React.FC<StoryCardProps> = ({ story, onClick, onLike, onComment }) => {
     const readingTime = calculateReadingTime(story.content);
     const excerpt = story.content.length > 120
         ? `${story.content.substring(0, 120)}...`
@@ -45,8 +47,8 @@ export const StoryCard: React.FC<StoryCardProps> = ({ story, onClick }) => {
                     {/* Language Badge */}
                     <div className="absolute top-3 right-3">
                         <span className={`px-2 py-1 rounded-lg text-xs font-bold ${story.language === 'ta'
-                                ? 'bg-orange-500/80 text-white'
-                                : 'bg-cyan-500/80 text-white'
+                            ? 'bg-orange-500/80 text-white'
+                            : 'bg-cyan-500/80 text-white'
                             }`}>
                             <Globe size={12} className="inline mr-1" />
                             {getLanguageLabel(story.language)}
@@ -80,19 +82,41 @@ export const StoryCard: React.FC<StoryCardProps> = ({ story, onClick }) => {
                         <span className="text-xs text-gray-400">@{story.author_username}</span>
                     </div>
 
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span className="flex items-center gap-1">
                             <Clock size={12} />
                             {readingTime} min
                         </span>
-                        <span className="flex items-center gap-1">
-                            <Heart size={12} />
-                            {story.likes_count}
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <MessageCircle size={12} />
-                            {story.comments_count}
-                        </span>
+
+                        {/* Like Button */}
+                        <div className="relative z-20">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onLike(e);
+                                }}
+                                className={`flex items-center gap-1 transition-colors ${story.is_liked ? 'text-pink-500' : 'hover:text-pink-400'}`}
+                                title="Like Story"
+                            >
+                                <Heart size={14} className={story.is_liked ? "fill-current" : ""} />
+                                <span>{story.likes_count}</span>
+                            </button>
+                        </div>
+
+                        {/* Comment Button */}
+                        <div className="relative z-20">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onComment(e);
+                                }}
+                                className="flex items-center gap-1 hover:text-cyan-400 transition-colors"
+                                title="View Comments"
+                            >
+                                <MessageCircle size={14} />
+                                <span>{story.comments_count}</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

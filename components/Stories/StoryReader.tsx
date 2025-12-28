@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Heart, MessageCircle, Clock, ChevronLeft, Send, Globe } from 'lucide-react';
+import { X, Heart, MessageCircle, Clock, ChevronLeft, Send, Globe, Share2 } from 'lucide-react';
 import { Story, StoryComment, UserProfile } from '../../types';
 import { GlassCard } from '../UI/GlassCard';
 
@@ -11,6 +11,7 @@ interface StoryReaderProps {
     onClose: () => void;
     onLike: () => void;
     onAddComment: (content: string) => Promise<void>;
+    onDelete?: (storyId: string) => Promise<void>;
 }
 
 // Calculate reading time
@@ -40,13 +41,16 @@ export const StoryReader: React.FC<StoryReaderProps> = ({
     isLoadingComments,
     onClose,
     onLike,
-    onAddComment
+    onAddComment,
+    onDelete,
+    initialShowComments = false
 }) => {
     const [liked, setLiked] = useState(story.is_liked || false);
     const [likesCount, setLikesCount] = useState(story.likes_count);
     const [newComment, setNewComment] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [showComments, setShowComments] = useState(false);
+    const [showComments, setShowComments] = useState(initialShowComments);
+    const [showMenu, setShowMenu] = useState(false);
     const [progress, setProgress] = useState(0);
     const progressRef = useRef<HTMLDivElement>(null);
 
@@ -56,9 +60,21 @@ export const StoryReader: React.FC<StoryReaderProps> = ({
         setLikesCount(story.likes_count);
     }, [story.id, story.is_liked, story.likes_count]);
 
+    const handleCopyLink = () => {
+        navigator.clipboard.writeText(`${window.location.origin}/stories/${story.id}`);
+        setShowMenu(false);
+    };
+
+    const handleDelete = async () => {
+        if (confirm('Are you sure you want to delete this story?') && onDelete) {
+            await onDelete(story.id);
+            onClose();
+        }
+    };
+
     const readingTime = calculateReadingTime(story.content);
     const isTamil = story.language === 'ta';
-    const AUTO_ADVANCE_DURATION = 15000; // 15 seconds
+    const AUTO_ADVANCE_DURATION = 300000; // 5 minutes (practically infinite for reading)
 
     // Auto-advance logic
     useEffect(() => {
@@ -162,6 +178,35 @@ export const StoryReader: React.FC<StoryReaderProps> = ({
                             <Clock size={14} />
                             {readingTime} min read
                         </span>
+
+                        {/* Options Menu */}
+                        <div className="relative ml-2">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+                                className="p-2 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1" /><circle cx="12" cy="5" r="1" /><circle cx="12" cy="19" r="1" /></svg>
+                            </button>
+
+                            {showMenu && (
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-[#1a1d2d] border border-white/10 rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleCopyLink(); }}
+                                        className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-2"
+                                    >
+                                        <Share2 size={16} /> Copy Link
+                                    </button>
+                                    {user?.id === story.author_id && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+                                            className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center gap-2"
+                                        >
+                                            <X size={16} /> Delete Story
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>
@@ -242,7 +287,7 @@ export const StoryReader: React.FC<StoryReaderProps> = ({
 
                 {/* Comments Section */}
                 {showComments && (
-                    <div className="mt-8 space-y-6">
+                    <div className="mt-8 space-y-6 animate-in fade-in slide-in-from-bottom-10 duration-500">
                         <h3 className="text-xl font-bold text-white">Comments</h3>
 
                         {/* Comment Form */}
@@ -259,7 +304,7 @@ export const StoryReader: React.FC<StoryReaderProps> = ({
                                         value={newComment}
                                         onChange={(e) => setNewComment(e.target.value)}
                                         placeholder="Share your thoughts..."
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none"
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-all focus:bg-white/10"
                                         aria-label="Write a comment"
                                     />
                                 </div>
@@ -286,14 +331,14 @@ export const StoryReader: React.FC<StoryReaderProps> = ({
                         ) : (
                             <div className="space-y-4">
                                 {comments.map((comment) => (
-                                    <div key={comment.id} className="flex gap-3">
+                                    <div key={comment.id} className="flex gap-3 group animate-in fade-in slide-in-from-bottom-2 duration-300">
                                         <img
                                             src={comment.avatar_url}
                                             alt={`${comment.username}'s avatar`}
                                             className="w-9 h-9 rounded-full border border-white/10"
                                         />
                                         <div className="flex-1">
-                                            <div className="bg-white/5 rounded-2xl rounded-tl-sm p-3">
+                                            <div className="bg-white/5 rounded-2xl rounded-tl-sm p-3 group-hover:bg-white/10 transition-colors">
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <span className="text-xs font-bold text-purple-400">@{comment.username}</span>
                                                     <span className="text-[10px] text-gray-500">{getRelativeTime(comment.created_at)}</span>
