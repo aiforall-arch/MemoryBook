@@ -171,9 +171,19 @@ export const api = {
       // -------------------------------------
 
       // Fetch total likes received on all user's posts
-      // Fetch total likes received on all user's posts
-      // Optimization: Skipping exact like count for now to speed up login
-      const totalLikes = 0;
+      let totalLikes = 0;
+      try {
+        const { data: likesData } = await supabase
+          .from('posts')
+          .select('likes(count)')
+          .eq('user_id', user.id);
+
+        if (likesData) {
+          totalLikes = likesData.reduce((sum: number, p: any) => sum + (p.likes[0]?.count || 0), 0);
+        }
+      } catch (err) {
+        console.warn('SUPABASE: Failed to fetch total likes', err);
+      }
 
       return {
         id: user.id,
@@ -200,6 +210,7 @@ export const api = {
           id: existingUser.id,
           username: existingUser.email?.split('@')[0] || 'User',
           avatar_url: `https://ui-avatars.com/api/?name=${existingUser.email || 'User'}&background=random`,
+          bio: '',
           joined_at: new Date().toISOString(),
           stats: { posts: 0, likes: 0, friends: 0 }
         };

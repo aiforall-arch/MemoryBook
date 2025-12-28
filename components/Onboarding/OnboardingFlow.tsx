@@ -116,6 +116,30 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ user, onComplete
         }
     };
 
+    const handleSkip = async () => {
+        if (!confirm("Skip onboarding? This will use your default profile settings.")) return;
+
+        try {
+            // Minimal update to mark completion
+            await api.completeOnboarding(user.id, {
+                displayName: formData.displayName || user.username || 'User',
+                dateOfBirth: formData.dateOfBirth || '2000-01-01', // Default DOB if skipped
+                relationshipTags: [],
+                relationshipNote: '',
+                firstMemoryId: null,
+                avatarUrl: user.avatar_url
+            });
+
+            localStorage.removeItem(`onboarding_progress_${user.id}`);
+            onComplete();
+            showToast("Onboarding skipped!", "success");
+        } catch (error) {
+            console.error("Skip failed", error);
+            // Force complete locally even if backend fails (to unblock user)
+            onComplete();
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[100] bg-[#0B0F1A] flex flex-col items-center justify-center p-4 overflow-y-auto">
             {ToastComponent}
@@ -125,7 +149,17 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ user, onComplete
                 <div className="mb-8 space-y-2">
                     <div className="flex justify-between items-end text-xs font-bold uppercase tracking-widest">
                         <span className="text-purple-400">Step {currentStep} of 4</span>
-                        <span className="text-gray-500">{Math.round(progress)}% Complete</span>
+                        <div className="flex items-center gap-4">
+                            <span className="text-gray-500">{Math.round(progress)}% Complete</span>
+                            {currentStep === 1 && (
+                                <button
+                                    onClick={handleSkip}
+                                    className="text-gray-600 hover:text-white transition-colors text-[10px] underline decoration-gray-600 hover:decoration-white underline-offset-4"
+                                >
+                                    Skip Setup
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 shadow-inner">
                         <motion.div

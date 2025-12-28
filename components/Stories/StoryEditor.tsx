@@ -170,6 +170,8 @@ export const StoryEditor: React.FC<StoryEditorProps> = ({ user, isOpen, onClose,
             <GlassCard className="w-full max-w-5xl h-[90vh] flex overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-300">
                 <button
                     onClick={onClose}
+                    aria-label="Close Editor"
+                    title="Close Editor"
                     className="absolute top-4 right-4 z-50 p-2 bg-black/50 hover:bg-white/10 text-white rounded-full transition-colors"
                 >
                     <X size={20} />
