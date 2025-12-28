@@ -253,7 +253,7 @@ export const api = {
         user_id: c.user_id,
         username: profile?.username || 'User',
         avatar_url: profile?.avatar_url || `https://ui-avatars.com/api/?name=${profile?.username || 'User'}&background=random`,
-        content: c.content,
+        /* content check */content: c.content,
         created_at: c.created_at
       };
     });
@@ -420,14 +420,6 @@ export const api = {
     }
   },
 
-  deletePost: async (postId: string) => {
-    const { error } = await supabase
-      .from('posts')
-      .delete()
-      .eq('id', postId);
-
-    if (error) throw error;
-  },
 
   // 5. Profile Picture Upload (NEW - separate from existing logic)
   uploadProfilePicture: async (file: File, userId: string): Promise<string> => {
@@ -653,6 +645,30 @@ export const api = {
       .from('stories')
       .delete()
       .eq('id', storyId);
+
+    if (error) throw error;
+  },
+
+  deletePost: async (postId: string) => {
+    // 1. Delete comments
+    const { error: commentsError } = await supabase
+      .from('comments')
+      .delete()
+      .eq('post_id', postId);
+    if (commentsError) console.warn('SUPABASE: Error deleting post comments', commentsError);
+
+    // 2. Delete likes
+    const { error: likesError } = await supabase
+      .from('likes')
+      .delete()
+      .eq('post_id', postId);
+    if (likesError) console.warn('SUPABASE: Error deleting post likes', likesError);
+
+    // 3. Delete post
+    const { error } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', postId);
 
     if (error) throw error;
   },

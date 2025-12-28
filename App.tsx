@@ -318,7 +318,7 @@ const App: React.FC = () => {
 
   const handleDeletePost = async (postId: string) => {
     if (!user) return;
-    if (!window.confirm("Are you sure you want to delete this memory?")) return;
+    /* REMOVED REDUNDANT CONFIRM */
 
     try {
       await api.deletePost(postId);
