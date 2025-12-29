@@ -21,6 +21,7 @@ import { SkeletonLoader } from './components/UI/SkeletonLoader';
 import { AuthForm } from './components/Auth/AuthForm';
 import { useToast } from './components/UI/ToastNotification';
 import { OnboardingFlow } from './components/Onboarding/OnboardingFlow';
+import { ENV } from './src/env';
 
 import { MemorialHero } from './components/Feed/MemorialHero';
 
@@ -72,7 +73,6 @@ const App: React.FC = () => {
     }
 
     // CHECK FOR MISCONFIGURATION (Localhost in Prod)
-    // @ts-ignore
     if (import.meta.env.PROD && (ENV.SUPABASE_URL?.includes('localhost') || ENV.SUPABASE_URL?.includes('127.0.0.1'))) {
       const errorMsg = "CONFIGURATION ERROR: App is running in production but connecting to 'localhost'. Please update Vercel Environment Variables to use your real Supabase URL.";
       console.error(errorMsg);
