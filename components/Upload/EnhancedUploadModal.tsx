@@ -211,8 +211,8 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
             config: originalDimensions ? {
                 label: 'Original',
                 ratio: originalDimensions.ratio,
-                width: originalDimensions.width > 2000 ? 2000 : originalDimensions.width,
-                height: originalDimensions.width > 2000 ? 2000 / originalDimensions.ratio : originalDimensions.height
+                width: originalDimensions.width > 1600 ? 1600 : originalDimensions.width,
+                height: originalDimensions.width > 1600 ? 1600 / originalDimensions.ratio : originalDimensions.height
             } : null
         },
         { key: 'portrait' as const, icon: <Maximize className="rotate-90" size={16} />, label: 'Portrait' },

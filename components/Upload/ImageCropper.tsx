@@ -11,11 +11,11 @@ export interface CustomAspectRatio {
 
 // Instagram aspect ratios
 export const ASPECT_RATIOS = {
-    portrait: { label: 'Portrait', ratio: 4 / 5, width: 1080, height: 1350 },
-    landscape: { label: 'Landscape', ratio: 1.91 / 1, width: 1080, height: 566 },
-    stories: { label: 'Stories', ratio: 9 / 16, width: 1080, height: 1920 },
-    square: { label: 'Square', ratio: 1, width: 1080, height: 1080 },
-    original: { label: 'Original', ratio: 1, width: 1080, height: 1080 } // Placeholder, will be updated dynamically
+    portrait: { label: 'Portrait', ratio: 4 / 5, width: 900, height: 1125 },
+    landscape: { label: 'Landscape', ratio: 1.91 / 1, width: 900, height: 471 },
+    stories: { label: 'Stories', ratio: 9 / 16, width: 720, height: 1280 },
+    square: { label: 'Square', ratio: 1, width: 900, height: 900 },
+    original: { label: 'Original', ratio: 1, width: 900, height: 900 } // Placeholder, will be updated dynamically
 } as const;
 
 export type AspectRatioKey = keyof typeof ASPECT_RATIOS;
@@ -250,15 +250,15 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
             if (blob) {
                 onCropComplete(blob);
             }
-        }, 'image/jpeg', 0.95);
+        }, 'image/jpeg', 0.85);
     }, [imageLoaded, zoom, position, outputWidth, outputHeight, ratioConfig.ratio, onCropComplete]);
 
-    // Auto-generate crop when position/zoom changes
+    // Auto-generate crop when position/zoom changes (debounced for performance)
     useEffect(() => {
         if (imageLoaded) {
             const timeoutId = setTimeout(() => {
                 generateCrop();
-            }, 100);
+            }, 300);
             return () => clearTimeout(timeoutId);
         }
     }, [imageLoaded, zoom, position, generateCrop]);
