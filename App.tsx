@@ -306,7 +306,8 @@ const App: React.FC = () => {
     try {
       // Use the override if provided, otherwise fallback to current user state
       const effectiveUserId = userIdOverride || user?.id;
-      const data = await api.getPosts(effectiveUserId);
+      // Load 12 posts initially for faster first paint
+      const data = await api.getPosts(effectiveUserId, 12);
       setPosts(data);
     } catch (e) {
       console.error("Error fetching posts:", e);

@@ -267,8 +267,8 @@ export const api = {
   },
 
   // 2. Database - Posts
-  getPosts: async (currentUserId?: string): Promise<Post[]> => {
-    // 1. Fetch posts and likes count
+  getPosts: async (currentUserId?: string, limit: number = 20): Promise<Post[]> => {
+    // 1. Fetch posts and likes count (with limit for performance)
     const { data: postsData, error: postsError } = await supabase
       .from('posts')
       .select(`
@@ -282,7 +282,8 @@ export const api = {
           user_id
         )
       `)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
     if (postsError) {
       console.error('SUPABASE: getPosts error', postsError);
@@ -291,25 +292,24 @@ export const api = {
 
     if (!postsData || postsData.length === 0) return [];
 
-    // 1.5 Fetch comments counts
-    const { data: commentsData } = await supabase
-      .from('comments')
-      .select('post_id')
-      .in('post_id', postsData.map(p => p.id));
+    // 2. Fetch comments counts and profiles IN PARALLEL for faster loading
+    const postIds = postsData.map(p => p.id);
+    const userIds = Array.from(new Set(postsData.map(p => p.user_id)));
 
-    const commentsMap = (commentsData || []).reduce((acc: any, c: any) => {
+    const [commentsResult, profilesResult] = await Promise.all([
+      supabase.from('comments').select('post_id').in('post_id', postIds),
+      supabase.from('profiles').select('id, username, avatar_url').in('id', userIds)
+    ]);
+
+    const commentsData = commentsResult.data || [];
+    const profilesData = profilesResult.data || [];
+
+    const commentsMap = commentsData.reduce((acc: any, c: any) => {
       acc[c.post_id] = (acc[c.post_id] || 0) + 1;
       return acc;
     }, {});
 
-    // 2. Fetch profiles for these posts separately to avoid join errors
-    const userIds = Array.from(new Set(postsData.map(p => p.user_id)));
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('id, username, avatar_url')
-      .in('id', userIds);
-
-    const profileMap = (profilesData || []).reduce((acc: any, p: any) => {
+    const profileMap = profilesData.reduce((acc: any, p: any) => {
       acc[p.id] = p;
       return acc;
     }, {});
