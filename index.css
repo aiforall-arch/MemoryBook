@@ -1,3 +1,5 @@
+/* Tamil Font Support */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -94,8 +96,7 @@ body {
   box-shadow: 0 0 20px rgba(139, 92, 246, 0.4), 0 0 40px rgba(34, 211, 238, 0.2);
 }
 
-/* Tamil Font Support */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap');
+
 
 .font-tamil {
   font-family: 'Noto Sans Tamil', sans-serif;

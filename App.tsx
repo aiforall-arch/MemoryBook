@@ -71,6 +71,15 @@ const App: React.FC = () => {
       return;
     }
 
+    // CHECK FOR MISCONFIGURATION (Localhost in Prod)
+    // @ts-ignore
+    if (import.meta.env.PROD && (ENV.SUPABASE_URL?.includes('localhost') || ENV.SUPABASE_URL?.includes('127.0.0.1'))) {
+      const errorMsg = "CONFIGURATION ERROR: App is running in production but connecting to 'localhost'. Please update Vercel Environment Variables to use your real Supabase URL.";
+      console.error(errorMsg);
+      setAuthError(errorMsg);
+      return; // Stop execution to prevent confusing "connection refused" errors
+    }
+
     // Check active session
     const checkSession = async () => {
       console.log('APP: checkSession start');
@@ -498,10 +507,6 @@ const App: React.FC = () => {
   if (view === 'login' && showWelcome) {
     return (
       <WelcomeScreen
-        onGetStarted={() => {
-          setAuthMode('signup');
-          setShowWelcome(false);
-        }}
         onLogin={() => {
           setAuthMode('login');
           setShowWelcome(false);

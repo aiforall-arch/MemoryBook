@@ -1,7 +1,6 @@
 import React from 'react';
 
 interface WelcomeScreenProps {
-    onGetStarted: () => void;
     onLogin: () => void;
 }
 
@@ -9,7 +8,7 @@ interface WelcomeScreenProps {
  * WelcomeScreen - Landing page matching the user's design
  * Shows before the login/signup form
  */
-export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onGetStarted, onLogin }) => {
+export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin }) => {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#0B0F1A] p-6 relative overflow-hidden">
             {/* Abstract Background Blobs */}
@@ -35,23 +34,13 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onGetStarted, onLo
                 </p>
 
                 {/* Buttons Container */}
-                <div className="space-y-4 px-4">
-                    {/* Get Started Button */}
-                    <button
-                        onClick={onGetStarted}
-                        className="w-full py-4 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-2xl text-white font-semibold text-lg shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:shadow-[0_0_40px_rgba(168,85,247,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
-                    >
-                        Get Started
-                    </button>
-
-                    {/* Login / Sign Up Button */}
-                    <button
-                        onClick={onLogin}
-                        className="w-full py-4 bg-[#1E203C]/80 border border-white/10 rounded-2xl text-gray-300 font-semibold text-lg hover:bg-[#2a2d4a] hover:border-purple-500/30 transition-all duration-300"
-                    >
-                        Login / Sign Up
-                    </button>
-                </div>
+                {/* Login / Sign Up Button - Primary Action */}
+                <button
+                    onClick={onLogin}
+                    className="w-full py-4 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-2xl text-white font-semibold text-lg shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:shadow-[0_0_40px_rgba(168,85,247,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+                >
+                    Login / Sign Up
+                </button>
             </div>
         </div>
     );
