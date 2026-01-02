@@ -403,14 +403,18 @@ const App: React.FC = () => {
       }
       await api.createStory(user.id, input, coverUrl);
 
-      const freshStories = await api.getStories();
-      setStories(freshStories);
+      // Non-blocking refresh - don't wait for this
+      api.getStories().then(freshStories => {
+        setStories(freshStories);
+      }).catch(err => {
+        console.warn('Failed to refresh stories list:', err);
+      });
 
       setIsStoryEditorOpen(false);
-      showToast('Story published successfully!', 'success');
+      // Toast is now shown in StoryEditor on success
     } catch (e: any) {
       console.error('Failed to publish story:', e);
-      showToast('Failed to publish story', 'error');
+      throw e; // Re-throw so StoryEditor can handle it
     }
   };
 

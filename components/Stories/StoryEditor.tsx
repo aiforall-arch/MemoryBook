@@ -129,8 +129,8 @@ export const StoryEditor: React.FC<StoryEditorProps> = ({ user, isOpen, onClose,
         setIsPublishing(true);
         setUploadProgress(0);
 
-        // Fake progress for UX
-        const interval = setInterval(() => {
+        // Fake progress for UX - clear reference for cleanup
+        let progressInterval: ReturnType<typeof setInterval> | null = setInterval(() => {
             setUploadProgress(p => p >= 90 ? 90 : p + 5);
         }, 100);
 
@@ -138,13 +138,30 @@ export const StoryEditor: React.FC<StoryEditorProps> = ({ user, isOpen, onClose,
             // Use original (or compressed) file directly, skipping crop to avoid crashes
             await onPublish({ title: title.trim(), content: content.trim(), language }, originalFile || undefined);
 
+            // Clear interval before setting 100%
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+
             setUploadProgress(100);
-            clearInterval(interval);
-            setTimeout(onClose, 500);
+            showToast('Story published successfully!', 'success');
+
+            // Small delay to show 100% before closing
+            setTimeout(() => {
+                setIsPublishing(false);
+                onClose();
+            }, 500);
         } catch (e) {
-            clearInterval(interval);
-            showToast('Failed to publish story', 'error');
+            console.error('Publish error:', e);
+            showToast('Failed to publish story. Please try again.', 'error');
+            setUploadProgress(0);
             setIsPublishing(false);
+        } finally {
+            // Ensure interval is always cleaned up
+            if (progressInterval) {
+                clearInterval(progressInterval);
+            }
         }
     };
 

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Heart, MessageCircle, Clock, ChevronLeft, Send, Globe, Share2 } from 'lucide-react';
 import { Story, StoryComment, UserProfile } from '../../types';
-import { GlassCard } from '../UI/GlassCard';
 
 interface StoryReaderProps {
     story: Story;
@@ -184,6 +183,7 @@ export const StoryReader: React.FC<StoryReaderProps> = ({
                             <button
                                 onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
                                 className="p-2 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                                aria-label="Open story options menu"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1" /><circle cx="12" cy="5" r="1" /><circle cx="12" cy="19" r="1" /></svg>
                             </button>

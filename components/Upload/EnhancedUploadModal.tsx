@@ -132,12 +132,11 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
         setUploadProgress(0);
         setUploadCancelled(false);
 
-        // Simulate progress (real progress would come from upload API)
-        const progressInterval = setInterval(() => {
+        // Simulate progress with proper cleanup reference
+        let progressInterval: ReturnType<typeof setInterval> | null = setInterval(() => {
             setUploadProgress(prev => {
                 if (prev >= 90) {
-                    clearInterval(progressInterval);
-                    return prev;
+                    return 90; // Cap at 90% until actual upload completes
                 }
                 return prev + Math.random() * 15;
             });
@@ -150,27 +149,39 @@ export const EnhancedUploadModal: React.FC<EnhancedUploadModalProps> = ({ onClos
             });
 
             if (uploadCancelled) {
-                clearInterval(progressInterval);
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
                 return;
             }
 
             await onUpload(croppedFile, caption);
 
-            setUploadProgress(100);
-            clearInterval(progressInterval);
+            // Clear interval before setting 100%
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
 
+            setUploadProgress(100);
             showToast('Memory captured successfully! 📸✨', 'success');
 
-            // Close modal after short delay
+            // Close modal after short delay to show 100%
             setTimeout(() => {
+                setIsUploading(false);
                 onClose();
-            }, 1000);
+            }, 800);
         } catch (err) {
             console.error('Upload error:', err);
-            clearInterval(progressInterval);
             showToast('Failed to upload memory. Please try again.', 'error');
-        } finally {
+            setUploadProgress(0);
             setIsUploading(false);
+        } finally {
+            // Ensure interval is always cleaned up
+            if (progressInterval) {
+                clearInterval(progressInterval);
+            }
         }
     };
 

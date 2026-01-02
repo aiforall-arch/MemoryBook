@@ -1,7 +1,6 @@
 import React from 'react';
-import { X, Heart, MessageCircle, User } from 'lucide-react';
+import { X, Heart, MessageCircle } from 'lucide-react';
 import { Post } from '../../types';
-import { GlassCard } from '../UI/GlassCard';
 
 interface FullscreenViewerProps {
     post: Post;
