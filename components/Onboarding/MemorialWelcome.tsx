@@ -29,7 +29,7 @@ export const MemorialWelcome: React.FC<MemorialWelcomeProps> = ({ onFinish }) =>
         <div className="relative w-full min-h-[600px] flex flex-col items-center justify-center text-center overflow-hidden rounded-3xl">
             {/* Background Image - Golden Hour Road */}
             <div
-                className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center"
+                className="absolute inset-0 bg-[url('/images/dawn-hero.png')] bg-cover bg-[center_75%]"
             >
                 <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
             </div>
@@ -83,6 +83,6 @@ export const MemorialWelcome: React.FC<MemorialWelcomeProps> = ({ onFinish }) =>
                     )}
                 </AnimatePresence>
             </div>
-        </div>
+        </div >
     );
 };

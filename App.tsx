@@ -627,25 +627,29 @@ const App: React.FC = () => {
           )}
 
           {view === 'explore' && (
-            <div className="text-center py-20">
-              <h2 className="text-3xl font-bold text-white mb-4">Some Moments Never Leave</h2>
-              <p className="text-gray-400">They wait here, quietly, to be remembered.</p>
-              {/* Reusing Masonry for demo */}
-              <div className="mt-8">
-                {isLoading ? (
-                  <SkeletonLoader count={6} />
-                ) : (
-                  <MasonryGrid
-                    posts={posts.slice().reverse()}
-                    isLoading={isLoading}
-                    onLike={handleToggleLike}
-                    onComment={(id) => setActiveCommentPostId(id)}
-                    onShare={(post) => setActiveSharePost(post)}
-                    onView={(post) => setActiveMemory(post)}
-                    onDelete={handleDeletePost}
-                    currentUserId={user?.id}
-                  />
-                )}
+            <div className="text-center py-20 relative min-h-[80vh]">
+              {/* Hero Background - Night */}
+              <div className="absolute inset-0 bg-[url('/images/night-hero.png')] bg-cover bg-center opacity-20 pointer-events-none rounded-3xl"></div>
+              <div className="relative z-10">
+                <h2 className="text-3xl font-bold text-white mb-4">Some Moments Never Leave</h2>
+                <p className="text-gray-400">They wait here, quietly, to be remembered.</p>
+                {/* Reusing Masonry for demo */}
+                <div className="mt-8">
+                  {isLoading ? (
+                    <SkeletonLoader count={6} />
+                  ) : (
+                    <MasonryGrid
+                      posts={posts.slice().reverse()}
+                      isLoading={isLoading}
+                      onLike={handleToggleLike}
+                      onComment={(id) => setActiveCommentPostId(id)}
+                      onShare={(post) => setActiveSharePost(post)}
+                      onView={(post) => setActiveMemory(post)}
+                      onDelete={handleDeletePost}
+                      currentUserId={user?.id}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -675,94 +679,98 @@ const App: React.FC = () => {
           )}
 
           {view === 'profile' && (
-            <div className="flex flex-col items-center pt-10">
-              {/* Profile Picture - Click to Edit (NEW) */}
-              <div
-                className="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-purple-500 to-cyan-500 mb-6 cursor-pointer relative group profile-picture-ring transition-all duration-300"
-                onClick={() => setIsProfilePictureOpen(true)}
-                title="Click to change profile picture"
-              >
-                <img src={user?.avatar_url} className="w-full h-full rounded-full object-cover border-4 border-[#0B0F1A]" alt="Profile" />
-                {/* Camera overlay on hover */}
-                <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Camera className="text-white" size={24} />
-                </div>
-              </div>
-              {isEditingUsername ? (
-                <div className="flex gap-2 mb-4 items-center">
-                  <input
-                    type="text"
-                    value={editedUsername}
-                    onChange={(e) => setEditedUsername(e.target.value)}
-                    className="bg-[#0B0F1A] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                    placeholder="Enter new username"
-                  />
-                  <NeonButton variant="primary" onClick={handleUpdateUsername}>Save</NeonButton>
-                  <button onClick={() => setIsEditingUsername(false)} className="text-gray-400 hover:text-white px-2">Cancel</button>
-                </div>
-              ) : (
-                <div className="group relative">
-                  <h1 className="text-3xl font-bold text-white mb-2">{user?.username}</h1>
-                  <button
-                    onClick={() => {
-                      setEditedUsername(user?.username || '');
-                      setIsEditingUsername(true);
-                    }}
-                    className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 transition-opacity text-purple-400 hover:text-purple-300"
-                    title="Edit Username"
-                  >
-                    <PenSquare size={16} />
-                  </button>
-                </div>
-              )}
-
-              {isEditingBio ? (
-                <div className="w-full max-w-md mb-8">
-                  <textarea
-                    value={editedBio}
-                    onChange={(e) => setEditedBio(e.target.value)}
-                    className="w-full bg-[#0B0F1A] border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors resize-none mb-4"
-                    placeholder="Tell us your story..."
-                    rows={3}
-                  />
-                  <div className="flex gap-2 justify-center">
-                    <NeonButton variant="primary" onClick={handleUpdateBio}>Save Bio</NeonButton>
-                    <NeonButton variant="secondary" onClick={() => setIsEditingBio(false)}>Cancel</NeonButton>
+            <div className="relative min-h-[80vh] rounded-3xl overflow-hidden">
+              {/* Hero Background - Night */}
+              <div className="absolute inset-0 bg-[url('/images/night-hero.png')] bg-cover bg-center opacity-20 pointer-events-none"></div>
+              <div className="flex flex-col items-center pt-10 relative z-10">
+                {/* Profile Picture - Click to Edit (NEW) */}
+                <div
+                  className="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-purple-500 to-cyan-500 mb-6 cursor-pointer relative group profile-picture-ring transition-all duration-300"
+                  onClick={() => setIsProfilePictureOpen(true)}
+                  title="Click to change profile picture"
+                >
+                  <img src={user?.avatar_url} className="w-full h-full rounded-full object-cover border-4 border-[#0B0F1A]" alt="Profile" />
+                  {/* Camera overlay on hover */}
+                  <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Camera className="text-white" size={24} />
                   </div>
                 </div>
-              ) : (
-                <div className="group relative">
-                  <p className="text-gray-400 mb-8 max-w-md text-center">{user?.bio || "No bio yet. Tap to add one."}</p>
-                  <button
-                    onClick={() => {
-                      setEditedBio(user?.bio || '');
-                      setIsEditingBio(true);
-                    }}
-                    className="absolute -right-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity text-purple-400 hover:text-purple-300"
-                    title="Edit Bio"
-                  >
-                    <PenSquare size={16} />
-                  </button>
+                {isEditingUsername ? (
+                  <div className="flex gap-2 mb-4 items-center">
+                    <input
+                      type="text"
+                      value={editedUsername}
+                      onChange={(e) => setEditedUsername(e.target.value)}
+                      className="bg-[#0B0F1A] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                      placeholder="Enter new username"
+                    />
+                    <NeonButton variant="primary" onClick={handleUpdateUsername}>Save</NeonButton>
+                    <button onClick={() => setIsEditingUsername(false)} className="text-gray-400 hover:text-white px-2">Cancel</button>
+                  </div>
+                ) : (
+                  <div className="group relative">
+                    <h1 className="text-3xl font-bold text-white mb-2">{user?.username}</h1>
+                    <button
+                      onClick={() => {
+                        setEditedUsername(user?.username || '');
+                        setIsEditingUsername(true);
+                      }}
+                      className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 transition-opacity text-purple-400 hover:text-purple-300"
+                      title="Edit Username"
+                    >
+                      <PenSquare size={16} />
+                    </button>
+                  </div>
+                )}
+
+                {isEditingBio ? (
+                  <div className="w-full max-w-md mb-8">
+                    <textarea
+                      value={editedBio}
+                      onChange={(e) => setEditedBio(e.target.value)}
+                      className="w-full bg-[#0B0F1A] border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors resize-none mb-4"
+                      placeholder="Tell us your story..."
+                      rows={3}
+                    />
+                    <div className="flex gap-2 justify-center">
+                      <NeonButton variant="primary" onClick={handleUpdateBio}>Save Bio</NeonButton>
+                      <NeonButton variant="secondary" onClick={() => setIsEditingBio(false)}>Cancel</NeonButton>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="group relative">
+                    <p className="text-gray-400 mb-8 max-w-md text-center">{user?.bio || "No bio yet. Tap to add one."}</p>
+                    <button
+                      onClick={() => {
+                        setEditedBio(user?.bio || '');
+                        setIsEditingBio(true);
+                      }}
+                      className="absolute -right-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity text-purple-400 hover:text-purple-300"
+                      title="Edit Bio"
+                    >
+                      <PenSquare size={16} />
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex gap-8 mb-12 border-b border-white/10 pb-8">
+                  <div className="text-center"><span className="block text-2xl font-bold text-white">{user?.stats.posts}</span><span className="text-xs text-gray-500 uppercase">Posts</span></div>
+                  <div className="text-center"><span className="block text-2xl font-bold text-white">{user?.stats.likes}</span><span className="text-xs text-gray-500 uppercase">Likes</span></div>
+                  <div className="text-center"><span className="block text-2xl font-bold text-white">{user?.stats.friends}</span><span className="text-xs text-gray-500 uppercase">Friends</span></div>
                 </div>
-              )}
 
-              <div className="flex gap-8 mb-12 border-b border-white/10 pb-8">
-                <div className="text-center"><span className="block text-2xl font-bold text-white">{user?.stats.posts}</span><span className="text-xs text-gray-500 uppercase">Posts</span></div>
-                <div className="text-center"><span className="block text-2xl font-bold text-white">{user?.stats.likes}</span><span className="text-xs text-gray-500 uppercase">Likes</span></div>
-                <div className="text-center"><span className="block text-2xl font-bold text-white">{user?.stats.friends}</span><span className="text-xs text-gray-500 uppercase">Friends</span></div>
-              </div>
-
-              <div className="w-full">
-                <h3 className="text-xl font-bold text-white mb-6">Your Gallery</h3>
-                <MasonryGrid
-                  posts={posts.filter(p => p.user_id === user?.id)}
-                  isLoading={false}
-                  onLike={handleToggleLike}
-                  onComment={(id) => setActiveCommentPostId(id)}
-                  onView={(post) => setActiveMemory(post)}
-                  onDelete={handleDeletePost}
-                  currentUserId={user?.id}
-                />
+                <div className="w-full">
+                  <h3 className="text-xl font-bold text-white mb-6">Your Gallery</h3>
+                  <MasonryGrid
+                    posts={posts.filter(p => p.user_id === user?.id)}
+                    isLoading={false}
+                    onLike={handleToggleLike}
+                    onComment={(id) => setActiveCommentPostId(id)}
+                    onView={(post) => setActiveMemory(post)}
+                    onDelete={handleDeletePost}
+                    currentUserId={user?.id}
+                  />
+                </div>
               </div>
             </div>
           )}

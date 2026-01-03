@@ -6,7 +6,7 @@ export const MemorialHero = () => {
         <div className="relative rounded-3xl overflow-hidden mb-12 min-h-[400px] flex items-center justify-center text-center">
             {/* Background - Deep/Serene */}
             <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 z-10 opacity-90"></div>
-            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-40"></div>
+            <div className="absolute inset-0 bg-[url('/images/twilight-hero.png')] bg-cover bg-center opacity-40"></div>
 
             <div className="relative z-20 max-w-4xl px-6">
                 <h1 className="text-4xl md:text-5xl font-serif font-medium text-white mb-6 tracking-wide leading-tight">
