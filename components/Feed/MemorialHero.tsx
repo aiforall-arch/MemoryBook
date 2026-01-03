@@ -3,12 +3,12 @@ import { NeonButton } from '../UI/NeonButton';
 
 export const MemorialHero = () => {
     return (
-        <div className="relative rounded-3xl overflow-hidden mb-12 min-h-[400px] flex items-center justify-center text-center">
-            {/* Background - Deep/Serene */}
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 z-10 opacity-90"></div>
-            <div className="absolute inset-0 bg-[url('/images/twilight-hero.png')] bg-cover bg-center opacity-40"></div>
+        <div className="relative rounded-3xl overflow-hidden mb-12 min-h-[450px] flex items-center justify-center text-center">
+            {/* Background - Sunset */}
+            <div className="absolute inset-0 bg-black/20 z-10"></div>
+            <div className="absolute inset-0 bg-[url('/images/sunset-hero.png')] bg-cover bg-[center_75%]"></div>
 
-            <div className="relative z-20 max-w-4xl px-6">
+            <div className="relative z-20 max-w-4xl px-6 py-12 m-8 rounded-2xl bg-black/10 backdrop-blur-sm border border-white/5 shadow-2xl">
                 <h1 className="text-4xl md:text-5xl font-serif font-medium text-white mb-6 tracking-wide leading-tight">
                     Some friendships don’t end.<br />
                     <span className="text-purple-200/90 italic">They become places we return to.</span>
@@ -21,7 +21,7 @@ export const MemorialHero = () => {
                 </p>
 
                 <div className="flex gap-4 justify-center">
-                    <button className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-all font-light tracking-widest uppercase">
+                    <button className="px-8 py-3 bg-white/10 border border-white/20 rounded-full text-sm text-white hover:bg-white/20 transition-all font-light tracking-widest uppercase backdrop-blur-sm hover:tracking-[0.2em] duration-500">
                         Explore the Vault
                     </button>
                 </div>
